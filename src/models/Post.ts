@@ -82,7 +82,11 @@ const PostSchema = new Schema(
       index: true,
     },
 
-    coverImageUrl: String,
+    coverImageUrl: { type: String, default: null },
+
+    isFeatured: { type: Boolean, default: false, index: true },
+    featuredRank: { type: Number, default: 0, index: true }, // lower = higher
+    featuredExpiresAt: { type: Date, default: null },
 
     createdBy: {
       type: Types.ObjectId,
@@ -107,6 +111,11 @@ PostSchema.index({ tenantId: 1, slug: 1 }, { unique: true })
 /**
  * Helpful compound index for blog listing
  */
-PostSchema.index({ tenantId: 1, status: 1, publishedAt: -1 })
+PostSchema.index({ tenantId: 1, isFeatured: 1, status: 1, publishedAt: -1 })
+
+/**
+ * Fast featured listing (homepage)
+ */
+PostSchema.index({ tenantId: 1, isFeatured: 1, featuredRank: 1 })
 
 export const Post = model("Post", PostSchema)
