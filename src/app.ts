@@ -4,6 +4,8 @@ import cookieParser from "cookie-parser"
 import authRoutes from "./routes/v1/auth.routes"
 import adminRoutes from "./routes/v1/admin.routes"
 import { getSessionCookieOptions } from "./config/cookies"
+import publicPostsRoutes from "./routes/v1/public.posts.routes"
+import adminPostsRoutes from "./routes/v1/admin.posts.routes"
 
 export function createApp() {
   const app = express()
@@ -54,11 +56,17 @@ export function createApp() {
   })
 
   // Mount auth routes
-  app.use("/v1/auth", authRoutes)
+  app.use("/api/v1/auth", authRoutes)
 
   // Mount admin routes
-  app.use("/v1/admin", adminRoutes)
+  app.use("/api/v1/admin", adminRoutes)
 
+  // Mount public post routes
+  app.use("/api/v1/public/posts", publicPostsRoutes)
+
+  // Mount admin post routes
+  app.use("/api/v1/admin/posts", adminPostsRoutes)
+  
   // Global error handler
 app.use((err: any, _req: any, res: any, _next: any) => {
   const status = err.status || 500
