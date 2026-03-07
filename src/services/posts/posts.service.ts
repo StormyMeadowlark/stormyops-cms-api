@@ -13,7 +13,36 @@ function toObjectId(id: string) {
 
 export async function createPost(params: { tenantId: string; userId: string; data: any }) {
   const slug = normalizeSlug(params.data.slug || "")
-  if (!slug || !isValidSlug(slug)) throw Object.assign(new Error("Invalid slug"), { status: 400 })
+  if (!slug || !isValidSlug(slug)) {
+    throw Object.assign(new Error("Invalid slug"), { status: 400 })
+  }
+
+  const status = params.data.status || "draft"
+  const now = new Date()
+
+  let scheduledFor: Date | null = null
+  let publishedAt: Date | null = null
+
+  if (status === "published") {
+    publishedAt = now
+  }
+
+  if (status === "scheduled") {
+    scheduledFor = params.data.scheduledFor ? new Date(params.data.scheduledFor) : null
+
+    if (!scheduledFor || isNaN(scheduledFor.getTime())) {
+      throw Object.assign(new Error("scheduledFor is required for scheduled posts"), { status: 400 })
+    }
+
+    if (scheduledFor.getTime() <= Date.now()) {
+      throw Object.assign(new Error("scheduledFor must be in the future"), { status: 400 })
+    }
+  }
+
+  if (status === "draft") {
+    scheduledFor = null
+    publishedAt = null
+  }
 
   try {
     const doc = await Post.create({
@@ -25,14 +54,16 @@ export async function createPost(params: { tenantId: string; userId: string; dat
       tags: params.data.tags || [],
       coverImageUrl: params.data.coverImageUrl ?? null,
       seo: params.data.seo || {},
-      status: params.data.status || "draft",
-      scheduledFor: params.data.scheduledFor ? new Date(params.data.scheduledFor) : null,
-      publishedAt: params.data.status === "published" ? new Date() : null,
 
-      // featured
+      status,
+      scheduledFor,
+      publishedAt,
+
       isFeatured: params.data.isFeatured ?? false,
       featuredRank: params.data.featuredRank ?? 0,
-      featuredExpiresAt: params.data.featuredExpiresAt ? new Date(params.data.featuredExpiresAt) : null,
+      featuredExpiresAt: params.data.featuredExpiresAt
+        ? new Date(params.data.featuredExpiresAt)
+        : null,
 
       createdBy: params.userId,
       updatedBy: params.userId,
@@ -186,12 +217,29 @@ export async function schedulePost(params: {
   }
 
   const doc = await Post.findOneAndUpdate(
-    { _id: oid, tenantId: params.tenantId },
-    { $set: { status: "scheduled", scheduledFor: params.scheduledFor, publishedAt: null, updatedBy: params.userId } },
+    {
+      _id: oid,
+      tenantId: params.tenantId,
+      status: { $in: ["draft", "scheduled"] },
+    },
+    {
+      $set: {
+        status: "scheduled",
+        scheduledFor: params.scheduledFor,
+        publishedAt: null,
+        updatedBy: params.userId,
+      },
+    },
     { new: true }
   ).lean()
 
-  if (!doc) throw Object.assign(new Error("Not found"), { status: 404 })
+  if (!doc) {
+    throw Object.assign(
+      new Error("Not found or post cannot be scheduled from its current status"),
+      { status: 409 }
+    )
+  }
+
   return doc
 }
 
@@ -201,7 +249,13 @@ export async function archivePost(params: { tenantId: string; userId: string; id
 
   const doc = await Post.findOneAndUpdate(
     { _id: oid, tenantId: params.tenantId },
-    { $set: { status: "archived", updatedBy: params.userId } },
+    {
+      $set: {
+        status: "archived",
+        scheduledFor: null,
+        updatedBy: params.userId,
+      },
+    },
     { new: true }
   ).lean()
 
@@ -215,7 +269,13 @@ export async function unarchivePost(params: { tenantId: string; userId: string; 
 
   const doc = await Post.findOneAndUpdate(
     { _id: oid, tenantId: params.tenantId },
-    { $set: { status: "draft", updatedBy: params.userId } },
+    {
+      $set: {
+        status: "draft",
+        scheduledFor: null,
+        updatedBy: params.userId,
+      },
+    },
     { new: true }
   ).lean()
 

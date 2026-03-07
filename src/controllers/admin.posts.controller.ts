@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express"
 import { adminPatchSchema, createPostSchema } from "../validation/post.validation"
 import { createPost, getAdminPostById, listAdminPosts, updatePost, deletePost, publishPost, unpublishPost, archivePost, unarchivePost, schedulePost } from "../services/posts/posts.service"
-import { updatePostSchema } from "../validation/post.validation"
 import { scheduleSchema } from "../validation/schedule.validation"
 import { enqueuePublishJob, removePublishJob } from "../jobs/publishJobs"
 

@@ -4,6 +4,8 @@ dotenv.config()
 import { createApp } from "./app"
 import { connectDb } from "./config/db"
 
+import "./jobs/workers/publish.worker"
+
 async function start() {
   await connectDb(process.env.MONGO_URI as string)
 

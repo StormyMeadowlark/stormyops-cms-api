@@ -27,7 +27,14 @@ export async function enqueuePublishJob(params: {
     {
       delay,
       jobId: publishJobId(params.tenantId, params.postId),
-      removeOnComplete: true,
+      removeOnComplete: 1000,
+      removeOnFail: false,
+      attempts: 5,
+      backoff: {
+        type: "exponential",
+        delay: 5000
+      }
     }
+    
   )
 }
