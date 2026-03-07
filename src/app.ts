@@ -6,6 +6,7 @@ import adminRoutes from "./routes/v1/admin.routes"
 import { getSessionCookieOptions } from "./config/cookies"
 import publicPostsRoutes from "./routes/v1/public.posts.routes"
 import adminPostsRoutes from "./routes/v1/admin.posts.routes"
+import healthRoutes from "./routes/v1/health.routes"
 
 export function createApp() {
   const app = express()
@@ -50,10 +51,8 @@ export function createApp() {
     next()
     })
 
-  // Health check
-  app.get("/health", (_req, res) => {
-    res.json({ ok: true })
-  })
+  // Health routes
+  app.use("/api/v1/health", healthRoutes)
 
   // Mount auth routes
   app.use("/api/v1/auth", authRoutes)
