@@ -4,8 +4,6 @@ dotenv.config()
 import { createApp } from "./app"
 import { connectDb } from "./config/db"
 
-import "./jobs/workers/publish.worker"
-
 async function start() {
   await connectDb(process.env.MONGO_URI as string)
 
@@ -16,5 +14,10 @@ async function start() {
     console.log(`stormyops-cms-api running on port ${port}`)
   })
 }
+
+start().catch((err) => {
+  console.error("API startup error:", err)
+  process.exit(1)
+})
 
 start()

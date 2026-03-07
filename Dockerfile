@@ -11,4 +11,4 @@ RUN npm run build
 
 EXPOSE 2025
 
-CMD ["npm", "start"]
+CMD ["node", "dist/server.js"]

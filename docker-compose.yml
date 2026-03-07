@@ -11,5 +11,25 @@ services:
     ports:
       - "6379:6379"
 
+  api:
+    build: .
+    ports:
+      - "2025:2025"
+    env_file:
+      - .env
+    depends_on:
+      - mongo
+      - redis
+    command: node dist/server.js
+
+  worker:
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      - mongo
+      - redis
+    command: node dist/worker.js
+
 volumes:
   stormyops_mongo:
