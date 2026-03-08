@@ -32,6 +32,59 @@ const imageBlock = z.object({
   }),
 })
 
+const galleryImageItemSchema = z.object({
+  url: z.string().url(),
+  alt: z.string().max(160).optional(),
+  caption: z.string().max(300).optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+})
+
+const galleryBlock = z.object({
+  type: z.literal("gallery"),
+  data: z.object({
+    layout: z.enum(["grid", "carousel", "masonry"]).default("grid"),
+    images: z.array(galleryImageItemSchema).min(2).max(50),
+  }),
+})
+
+const fileBlock = z.object({
+  type: z.literal("file"),
+  data: z.object({
+    url: z.string().url(),
+    fileName: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(120),
+    size: z.number().int().nonnegative().optional(),
+    title: z.string().max(120).optional(),
+    caption: z.string().max(300).optional(),
+  }),
+})
+
+const audioBlock = z.object({
+  type: z.literal("audio"),
+  data: z.object({
+    url: z.string().url(),
+    mimeType: z.enum(["audio/mpeg", "audio/wav", "audio/ogg"]),
+    title: z.string().max(120).optional(),
+    caption: z.string().max(300).optional(),
+    duration: z.number().nonnegative().optional(),
+  }),
+})
+
+const videoBlock = z.object({
+  type: z.literal("video"),
+  data: z.object({
+    url: z.string().url(),
+    mimeType: z.enum(["video/mp4", "video/webm"]),
+    posterUrl: z.string().url().optional(),
+    title: z.string().max(120).optional(),
+    caption: z.string().max(300).optional(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+    duration: z.number().nonnegative().optional(),
+  }),
+})
+
 const codeBlock = z.object({
   type: z.literal("code"),
   data: z.object({
@@ -72,9 +125,10 @@ const listBlock = z.object({
 const embedBlock = z.object({
   type: z.literal("embed"),
   data: z.object({
-    provider: z.enum(["youtube", "vimeo", "generic"]).default("generic"),
+    provider: z.enum(["youtube", "vimeo", "spotify", "loom", "codepen", "generic"]).default("generic"),
     url: z.string().url(),
     title: z.string().max(120).optional(),
+    caption: z.string().max(300).optional(),
   }),
 })
 
@@ -82,6 +136,10 @@ export const contentBlockSchema = z.discriminatedUnion("type", [
   paragraphBlock,
   headingBlock,
   imageBlock,
+  galleryBlock,
+  fileBlock,
+  audioBlock,
+  videoBlock,
   codeBlock,
   quoteBlock,
   calloutBlock,
