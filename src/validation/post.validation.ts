@@ -1,5 +1,15 @@
 import { nullable, z } from "zod"
+import {
+  IMAGE_MIME_TYPES,
+  DOCUMENT_MIME_TYPES,
+  AUDIO_MIME_TYPES,
+  VIDEO_MIME_TYPES,
+} from "../constants/media"
 
+const imageMimeEnum = z.enum(IMAGE_MIME_TYPES)
+const documentMimeEnum = z.enum(DOCUMENT_MIME_TYPES)
+const audioMimeEnum = z.enum(AUDIO_MIME_TYPES)
+const videoMimeEnum = z.enum(VIDEO_MIME_TYPES)
 /**
  * Content Blocks
  * - Keep data strict per type so rendering is predictable.
@@ -24,7 +34,9 @@ const headingBlock = z.object({
 const imageBlock = z.object({
   type: z.literal("image"),
   data: z.object({
+    mediaId: z.string().min(1),
     url: z.string().url(),
+    mimeType: imageMimeEnum,
     alt: z.string().max(160).optional(),
     caption: z.string().max(300).optional(),
     width: z.number().int().positive().optional(),
@@ -33,7 +45,9 @@ const imageBlock = z.object({
 })
 
 const galleryImageItemSchema = z.object({
+  mediaId: z.string().min(1),
   url: z.string().url(),
+  mimeType: imageMimeEnum,
   alt: z.string().max(160).optional(),
   caption: z.string().max(300).optional(),
   width: z.number().int().positive().optional(),
@@ -51,9 +65,10 @@ const galleryBlock = z.object({
 const fileBlock = z.object({
   type: z.literal("file"),
   data: z.object({
+    mediaId: z.string().min(1),
     url: z.string().url(),
     fileName: z.string().min(1).max(255),
-    mimeType: z.string().min(1).max(120),
+    mimeType: documentMimeEnum,
     size: z.number().int().nonnegative().optional(),
     title: z.string().max(120).optional(),
     caption: z.string().max(300).optional(),
@@ -63,8 +78,9 @@ const fileBlock = z.object({
 const audioBlock = z.object({
   type: z.literal("audio"),
   data: z.object({
+    mediaId: z.string().min(1),
     url: z.string().url(),
-    mimeType: z.enum(["audio/mpeg", "audio/wav", "audio/ogg"]),
+    mimeType: audioMimeEnum,
     title: z.string().max(120).optional(),
     caption: z.string().max(300).optional(),
     duration: z.number().nonnegative().optional(),
@@ -74,8 +90,9 @@ const audioBlock = z.object({
 const videoBlock = z.object({
   type: z.literal("video"),
   data: z.object({
+    mediaId: z.string().min(1),
     url: z.string().url(),
-    mimeType: z.enum(["video/mp4", "video/webm"]),
+    mimeType: videoMimeEnum,
     posterUrl: z.string().url().optional(),
     title: z.string().max(120).optional(),
     caption: z.string().max(300).optional(),
