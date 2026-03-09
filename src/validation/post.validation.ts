@@ -177,7 +177,7 @@ export const seoSchema = z
   })
   .optional()
 
-export const createPostSchema = z.object({
+const basePostSchema = z.object({
   title: z.string().min(1).max(200),
   slug: z.string().min(1).max(120),
   excerpt: z.string().max(500).optional(),
@@ -190,7 +190,9 @@ export const createPostSchema = z.object({
   seo: seoSchema,
   status: z.enum(["draft", "scheduled", "published"]).optional(),
   scheduledFor: z.string().datetime().optional(),
-}).superRefine((data, ctx) => {
+})
+
+export const createPostSchema = basePostSchema.superRefine((data, ctx) => {
   if (data.status === "scheduled" && !data.scheduledFor) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -200,7 +202,7 @@ export const createPostSchema = z.object({
   }
 })
 
-export const updatePostSchema = createPostSchema.partial()
+export const updatePostSchema = basePostSchema.partial()
 
 export const adminPatchSchema = updatePostSchema.omit({
   status: true,

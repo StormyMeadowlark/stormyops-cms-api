@@ -8,6 +8,7 @@ import {
   getAdminMedia,
   patchAdminMedia,
   deleteAdminMedia,
+  purgeAdminMedia,
 } from "../../controllers/media.controller"
 
 const router = Router()
@@ -51,5 +52,14 @@ router.delete(
   requireRole("admin", "editor"),
   deleteAdminMedia
 )
+
+router.delete(
+  "/:id/purge",
+  requireTenant,
+  requireAuth,
+  requireRole("admin"),
+  purgeAdminMedia
+)
+
 
 export default router

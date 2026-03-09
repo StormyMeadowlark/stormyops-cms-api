@@ -100,6 +100,17 @@ const MediaSchema = new Schema(
       required: true,
       index: true,
     },
+
+    deletedAt: { 
+        type: Date, 
+        default: null 
+    },
+
+    deletedBy: { 
+        type: Types.ObjectId,
+        ref: "User",
+        default: null
+    },
   },
   { timestamps: true }
 )

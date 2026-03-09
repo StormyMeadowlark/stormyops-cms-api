@@ -19,5 +19,3 @@ start().catch((err) => {
   console.error("API startup error:", err)
   process.exit(1)
 })
-
-start()

@@ -10,6 +10,13 @@ import {
 const mediaKindEnum = z.enum(["image", "document", "audio", "video"])
 const allMimeEnum = z.enum(ALL_MEDIA_MIME_TYPES)
 
+const MIME_TYPES_BY_KIND: Record<z.infer<typeof mediaKindEnum>, readonly string[]> = {
+  image: IMAGE_MIME_TYPES,
+  document: DOCUMENT_MIME_TYPES,
+  audio: AUDIO_MIME_TYPES,
+  video: VIDEO_MIME_TYPES,
+}
+
 export const createMediaSchema = z.object({
   kind: mediaKindEnum,
   fileName: z.string().min(1).max(255),
@@ -27,19 +34,8 @@ export const createMediaSchema = z.object({
   defaultAlt: z.string().max(160).optional(),
   defaultCaption: z.string().max(300).optional(),
 }).superRefine((data, ctx) => {
-  const mime = data.mimeType as string
-
-  let isValidForKind = false
-
-  if (data.kind === "image") {
-    isValidForKind = IMAGE_MIME_TYPES.includes(mime as any)
-  } else if (data.kind === "document") {
-    isValidForKind = DOCUMENT_MIME_TYPES.includes(mime as any)
-  } else if (data.kind === "audio") {
-    isValidForKind = AUDIO_MIME_TYPES.includes(mime as any)
-  } else if (data.kind === "video") {
-    isValidForKind = VIDEO_MIME_TYPES.includes(mime as any)
-  }
+  const allowedMimeTypes = MIME_TYPES_BY_KIND[data.kind]
+  const isValidForKind = allowedMimeTypes.includes(data.mimeType)
 
   if (!isValidForKind) {
     ctx.addIssue({

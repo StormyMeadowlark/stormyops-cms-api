@@ -8,6 +8,7 @@ import publicPostsRoutes from "./routes/v1/public.posts.routes"
 import adminPostsRoutes from "./routes/v1/admin.posts.routes"
 import healthRoutes from "./routes/v1/health.routes"
 import adminMediaRoutes from "./routes/v1/admin.media.routes"
+import adminMediaUploadRoutes from "./routes/v1/admin.media.upload.routes"
 
 export function createApp() {
   const app = express()
@@ -69,6 +70,9 @@ export function createApp() {
 
   // Mount admin media routes
   app.use("/api/v1/admin/media", adminMediaRoutes)
+
+    // Mount admin media upload routes
+  app.use("/api/v1/admin/media", adminMediaUploadRoutes)
   
   // Global error handler
 app.use((err: any, _req: any, res: any, _next: any) => {

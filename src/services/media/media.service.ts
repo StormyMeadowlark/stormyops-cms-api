@@ -1,5 +1,12 @@
 import { Types } from "mongoose"
 import { Media } from "../../models/Media"
+import { Post } from "../../models/Post"
+import {
+  deleteFromSpaces,
+  extractStorageKeyFromUrl,
+  headObjectInSpaces,
+  objectExistsInSpaces,
+} from "./media.storage.service"
 
 function isDuplicateKeyError(err: any) {
   return err && (err.code === 11000 || err.codeName === "DuplicateKey")
@@ -154,26 +161,143 @@ export async function updateMedia(params: {
 
 export async function deleteMedia(params: {
   tenantId: string
+  userId: string
   id: string
 }) {
   const oid = toObjectId(params.id)
   if (!oid) throw Object.assign(new Error("Invalid id"), { status: 400 })
 
-  const doc = await Media.findOneAndUpdate(
-    {
-      _id: oid,
-      tenantId: params.tenantId,
-      status: { $ne: "deleted" },
-    },
-    {
-      $set: {
-        status: "deleted",
-      },
-    },
-    { new: true }
-  ).lean()
+  const media = await Media.findOne({
+    _id: oid,
+    tenantId: params.tenantId,
+    status: { $ne: "deleted" },
+  })
 
-  if (!doc) throw Object.assign(new Error("Not found"), { status: 404 })
+  if (!media) {
+    throw Object.assign(new Error("Not found"), { status: 404 })
+  }
 
-  return { ok: true }
+  const usage = await isMediaInUse(params.tenantId, media._id.toString())
+
+  if (usage) {
+    throw Object.assign(
+      new Error(`Cannot delete media because it is used by post "${usage.title}"`),
+      { status: 409 }
+    )
+  }
+
+  const resolvedStorageKey =
+    media.storageKey?.trim() || extractStorageKeyFromUrl(media.url)
+
+  if (!resolvedStorageKey) {
+    throw Object.assign(
+      new Error("Media is missing a valid storageKey and url fallback"),
+      { status: 500 }
+    )
+  }
+
+  console.log("Deleting media from Spaces", {
+    mediaId: media._id.toString(),
+    storageKey: media.storageKey,
+    resolvedStorageKey,
+    url: media.url,
+  })
+
+  const existedBeforeDelete = await objectExistsInSpaces(resolvedStorageKey)
+
+  await deleteFromSpaces(resolvedStorageKey)
+
+  const existsAfterDelete = await objectExistsInSpaces(resolvedStorageKey)
+
+  if (existedBeforeDelete && existsAfterDelete) {
+    throw Object.assign(
+      new Error("Failed to delete file from DigitalOcean Spaces"),
+      { status: 502 }
+    )
+  }
+
+  media.status = "deleted"
+  media.deletedAt = new Date()
+  media.deletedBy = new Types.ObjectId(params.userId)
+
+  await media.save()
+
+  return {
+    ok: true,
+    deleted: true,
+  }
+}
+
+async function isMediaInUse(tenantId: string, mediaId: string) {
+  const doc = await Post.findOne({
+    tenantId,
+    status: { $ne: "archived" },
+    $or: [
+      { "content.data.mediaId": mediaId },
+      { "content.data.images.mediaId": mediaId },
+    ],
+  })
+    .select("_id title slug")
+    .lean()
+
+  return doc
+}
+
+
+export async function purgeMedia(params: {
+  tenantId: string
+  id: string
+}) {
+  const oid = toObjectId(params.id)
+  if (!oid) throw Object.assign(new Error("Invalid id"), { status: 400 })
+
+  const media = await Media.findOne({
+    _id: oid,
+    tenantId: params.tenantId,
+  })
+
+  if (!media) {
+    throw Object.assign(new Error("Not found"), { status: 404 })
+  }
+
+  if (media.status !== "deleted") {
+    throw Object.assign(
+      new Error("Only deleted media can be purged"),
+      { status: 409 }
+    )
+  }
+
+  const resolvedStorageKey =
+    media.storageKey?.trim() || extractStorageKeyFromUrl(media.url)
+
+  if (!resolvedStorageKey) {
+    throw Object.assign(
+      new Error("Media is missing a valid storageKey"),
+      { status: 500 }
+    )
+  }
+
+  const existsInSpaces = await objectExistsInSpaces(resolvedStorageKey)
+
+  if (existsInSpaces) {
+    throw Object.assign(
+      new Error("Cannot purge media because file still exists in DigitalOcean Spaces"),
+      { status: 409 }
+    )
+  }
+
+  const result = await Media.deleteOne({
+    _id: oid,
+    tenantId: params.tenantId,
+    status: "deleted",
+  })
+
+  if (result.deletedCount === 0) {
+    throw Object.assign(new Error("Failed to purge media"), { status: 500 })
+  }
+
+  return {
+    ok: true,
+    purged: true,
+  }
 }
