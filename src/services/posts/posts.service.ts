@@ -1,4 +1,5 @@
 import { Types } from "mongoose"
+import { Media } from "../../models/Media"
 import { Post } from "../../models/Post"
 import { normalizeSlug, isValidSlug } from "../../utils/slug"
 
@@ -11,6 +12,159 @@ function toObjectId(id: string) {
   return new Types.ObjectId(id)
 }
 
+function collectMediaRefsFromContent(content: any[] = []) {
+  const refs: Array<{
+    mediaId: string
+    expectedKind: "image" | "document" | "audio" | "video"
+    blockType: string
+    blockIndex: number
+    nestedIndex?: number
+    url?: string
+  }> = []
+
+  for (let i = 0; i < content.length; i++) {
+    const block = content[i]
+    if (!block || typeof block !== "object") continue
+
+    switch (block.type) {
+      case "image":
+        if (block.data?.mediaId) {
+          refs.push({
+            mediaId: block.data.mediaId,
+            expectedKind: "image",
+            blockType: "image",
+            blockIndex: i,
+            url: block.data.url,
+          })
+        }
+        break
+
+      case "gallery": {
+        const images = Array.isArray(block.data?.images) ? block.data.images : []
+        for (let j = 0; j < images.length; j++) {
+          const image = images[j]
+          if (!image?.mediaId) continue
+
+          refs.push({
+            mediaId: image.mediaId,
+            expectedKind: "image",
+            blockType: "gallery",
+            blockIndex: i,
+            nestedIndex: j,
+            url: image.url,
+          })
+        }
+        break
+      }
+
+      case "file":
+        if (block.data?.mediaId) {
+          refs.push({
+            mediaId: block.data.mediaId,
+            expectedKind: "document",
+            blockType: "file",
+            blockIndex: i,
+            url: block.data.url,
+          })
+        }
+        break
+
+      case "audio":
+        if (block.data?.mediaId) {
+          refs.push({
+            mediaId: block.data.mediaId,
+            expectedKind: "audio",
+            blockType: "audio",
+            blockIndex: i,
+            url: block.data.url,
+          })
+        }
+        break
+
+      case "video":
+        if (block.data?.mediaId) {
+          refs.push({
+            mediaId: block.data.mediaId,
+            expectedKind: "video",
+            blockType: "video",
+            blockIndex: i,
+            url: block.data.url,
+          })
+        }
+        break
+    }
+  }
+
+  return refs
+}
+
+async function validatePostMediaReferences(params: {
+  tenantId: string
+  content?: any[]
+}) {
+  const refs = collectMediaRefsFromContent(params.content || [])
+  if (refs.length === 0) return
+
+  const uniqueIds = [...new Set(refs.map((r) => r.mediaId))]
+  const objectIds = uniqueIds
+    .map((id) => toObjectId(id))
+    .filter((id): id is Types.ObjectId => !!id)
+
+  if (objectIds.length !== uniqueIds.length) {
+    throw Object.assign(new Error("One or more content mediaId values are invalid"), {
+      status: 400,
+    })
+  }
+
+  const mediaDocs = await Media.find({
+    _id: { $in: objectIds },
+    tenantId: params.tenantId,
+  })
+    .select("_id kind status url")
+    .lean()
+
+  const mediaMap = new Map(mediaDocs.map((doc) => [doc._id.toString(), doc]))
+
+  for (const ref of refs) {
+    const media = mediaMap.get(ref.mediaId)
+
+    const location =
+      ref.nestedIndex !== undefined
+        ? `${ref.blockType} block at index ${ref.blockIndex}, item ${ref.nestedIndex}`
+        : `${ref.blockType} block at index ${ref.blockIndex}`
+
+    if (!media) {
+      throw Object.assign(
+        new Error(`Referenced media does not exist for ${location}`),
+        { status: 400 }
+      )
+    }
+
+    if (media.status !== "ready") {
+      throw Object.assign(
+        new Error(`Referenced media is not ready for ${location}`),
+        { status: 400 }
+      )
+    }
+
+    if (media.kind !== ref.expectedKind) {
+      throw Object.assign(
+        new Error(
+          `Referenced media kind mismatch for ${location}. Expected ${ref.expectedKind}, got ${media.kind}`
+        ),
+        { status: 400 }
+      )
+    }
+
+    if (ref.url && media.url !== ref.url) {
+      throw Object.assign(
+        new Error(`Referenced media url does not match stored media for ${location}`),
+        { status: 400 }
+      )
+    }
+  }
+}
+
 export async function createPost(params: { tenantId: string; userId: string; data: any }) {
   const slug = normalizeSlug(params.data.slug || "")
   if (!slug || !isValidSlug(slug)) {
@@ -21,6 +175,11 @@ export async function createPost(params: { tenantId: string; userId: string; dat
   const now = new Date()
 
   const publishedAt = status === "published" ? now : null
+
+  await validatePostMediaReferences({
+    tenantId: params.tenantId,
+    content: params.data.content || [],
+  })
 
   try {
     const doc = await Post.create({
@@ -104,17 +263,25 @@ export async function updatePost(params: { tenantId: string; userId: string; id:
 
   const update: any = { ...params.data, updatedBy: params.userId }
 
+  delete update.status
+  delete update.scheduledFor
+  delete update.publishedAt
+
   if (typeof update.slug === "string") {
     const slug = normalizeSlug(update.slug)
     if (!slug || !isValidSlug(slug)) throw Object.assign(new Error("Invalid slug"), { status: 400 })
     update.slug = slug
   }
 
-  if (typeof update.scheduledFor === "string") update.scheduledFor = new Date(update.scheduledFor)
-  if (update.scheduledFor === undefined) delete update.scheduledFor
-
   if (typeof update.featuredExpiresAt === "string") update.featuredExpiresAt = new Date(update.featuredExpiresAt)
   if (update.featuredExpiresAt === undefined) delete update.featuredExpiresAt
+
+  if (update.content !== undefined) {
+    await validatePostMediaReferences({
+      tenantId: params.tenantId,
+      content: update.content,
+    })
+  }
 
   try {
     const doc = await Post.findOneAndUpdate(
@@ -189,6 +356,10 @@ export async function schedulePost(params: {
 }) {
   const oid = toObjectId(params.id)
   if (!oid) throw Object.assign(new Error("Invalid id"), { status: 400 })
+
+  if (params.scheduledFor.getTime() <= Date.now()) {
+  throw Object.assign(new Error("scheduledFor must be in the future"), { status: 400 })
+  }  
 
   if (!(params.scheduledFor instanceof Date) || isNaN(params.scheduledFor.getTime())) {
     throw Object.assign(new Error("Invalid scheduledFor"), { status: 400 })
