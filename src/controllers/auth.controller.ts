@@ -30,10 +30,17 @@ export async function logout(req: Request, res: Response) {
 export async function me(req: Request, res: Response) {
   const cookieName = process.env.SESSION_COOKIE_NAME || "stormyops_session"
   const sid = req.cookies?.[cookieName]
-  if (!sid) return res.status(401).json({ message: "Not authenticated" })
+
+  if (!sid) {
+    return res.status(401).json({ message: "Not authenticated" })
+  }
 
   const user = await getMeFromSession(sid)
-  if (!user) return res.status(401).json({ message: "Not authenticated" })
+
+  if (!user) {
+    res.clearCookie(cookieName, (req as any).cookieOptions)
+    return res.status(401).json({ message: "Not authenticated" })
+  }
 
   return res.json({ email: user.email, role: user.role })
 }

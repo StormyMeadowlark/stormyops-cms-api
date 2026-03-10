@@ -27,9 +27,27 @@ export async function logoutSession(sessionId: string) {
 }
 
 export async function getMeFromSession(sessionId: string) {
-  const session = await Session.findOne({ sessionId })
-  if (!session) return null
+  const now = new Date()
+
+  const session = await Session.findOne({
+    sessionId,
+    expiresAt: { $gt: now },
+  })
+
+  if (!session) {
+    const expiredSession = await Session.findOne({ sessionId }).select("_id")
+    if (expiredSession) {
+      await Session.deleteOne({ _id: expiredSession._id })
+    }
+    return null
+  }
 
   const user = await User.findById(session.userId).select("email role")
+
+  if (!user) {
+    await Session.deleteOne({ _id: session._id })
+    return null
+  }
+
   return user
 }
