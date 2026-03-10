@@ -4,7 +4,6 @@ import { Post } from "../../models/Post"
 import {
   deleteFromSpaces,
   extractStorageKeyFromUrl,
-  headObjectInSpaces,
   objectExistsInSpaces,
 } from "./media.storage.service"
 
@@ -177,11 +176,17 @@ export async function deleteMedia(params: {
     throw Object.assign(new Error("Not found"), { status: 404 })
   }
 
-  const usage = await isMediaInUse(params.tenantId, media._id.toString())
+  const usage = await isMediaInUse({
+  tenantId: params.tenantId,
+  mediaId: media._id.toString(),
+  mediaUrl: media.url,
+  })
 
   if (usage) {
     throw Object.assign(
-      new Error(`Cannot delete media because it is used by post "${usage.title}"`),
+      new Error(
+        `Cannot delete media because it is still used by post "${usage.title}" as ${usage.usageType}`
+      ),
       { status: 409 }
     )
   }
@@ -228,19 +233,57 @@ export async function deleteMedia(params: {
   }
 }
 
-async function isMediaInUse(tenantId: string, mediaId: string) {
+async function isMediaInUse(params: {
+  tenantId: string
+  mediaId: string
+  mediaUrl?: string | null
+}) {
   const doc = await Post.findOne({
-    tenantId,
-    status: { $ne: "archived" },
+    tenantId: params.tenantId,
     $or: [
-      { "content.data.mediaId": mediaId },
-      { "content.data.images.mediaId": mediaId },
+      { "content.data.mediaId": params.mediaId },
+      { "content.data.images.mediaId": params.mediaId },
+      ...(params.mediaUrl
+        ? [
+            { coverImageUrl: params.mediaUrl },
+            { "seo.ogImageUrl": params.mediaUrl },
+          ]
+        : []),
     ],
   })
-    .select("_id title slug")
+    .select("_id title slug content coverImageUrl seo")
     .lean()
 
-  return doc
+  if (!doc) return null
+
+  let usageType = "content"
+
+  const content = Array.isArray(doc.content) ? doc.content : []
+
+  const usedInContent = content.some((block: any) => {
+    if (block?.data?.mediaId === params.mediaId) return true
+
+    if (Array.isArray(block?.data?.images)) {
+      return block.data.images.some((img: any) => img?.mediaId === params.mediaId)
+    }
+
+    return false
+  })
+
+  if (usedInContent) {
+    usageType = "content"
+  } else if (params.mediaUrl && doc.coverImageUrl === params.mediaUrl) {
+    usageType = "coverImage"
+  } else if (params.mediaUrl && doc.seo?.ogImageUrl === params.mediaUrl) {
+    usageType = "ogImage"
+  }
+
+  return {
+    _id: doc._id,
+    title: doc.title,
+    slug: doc.slug,
+    usageType,
+  }
 }
 
 
