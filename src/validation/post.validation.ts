@@ -188,19 +188,11 @@ const basePostSchema = z.object({
   featuredRank: z.number().int().min(0).max(9999).optional(),
   featuredExpiresAt: z.string().datetime().optional(),
   seo: seoSchema,
-  status: z.enum(["draft", "scheduled", "published"]).optional(),
+  status: z.enum(["draft", "published"]).optional(),
   scheduledFor: z.string().datetime().optional(),
 })
 
-export const createPostSchema = basePostSchema.superRefine((data, ctx) => {
-  if (data.status === "scheduled" && !data.scheduledFor) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["scheduledFor"],
-      message: "scheduledFor is required when status is scheduled",
-    })
-  }
-})
+export const createPostSchema = basePostSchema
 
 export const updatePostSchema = basePostSchema.partial()
 

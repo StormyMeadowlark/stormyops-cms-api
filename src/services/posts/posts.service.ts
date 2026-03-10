@@ -20,29 +20,7 @@ export async function createPost(params: { tenantId: string; userId: string; dat
   const status = params.data.status || "draft"
   const now = new Date()
 
-  let scheduledFor: Date | null = null
-  let publishedAt: Date | null = null
-
-  if (status === "published") {
-    publishedAt = now
-  }
-
-  if (status === "scheduled") {
-    scheduledFor = params.data.scheduledFor ? new Date(params.data.scheduledFor) : null
-
-    if (!scheduledFor || isNaN(scheduledFor.getTime())) {
-      throw Object.assign(new Error("scheduledFor is required for scheduled posts"), { status: 400 })
-    }
-
-    if (scheduledFor.getTime() <= Date.now()) {
-      throw Object.assign(new Error("scheduledFor must be in the future"), { status: 400 })
-    }
-  }
-
-  if (status === "draft") {
-    scheduledFor = null
-    publishedAt = null
-  }
+  const publishedAt = status === "published" ? now : null
 
   try {
     const doc = await Post.create({
@@ -56,7 +34,7 @@ export async function createPost(params: { tenantId: string; userId: string; dat
       seo: params.data.seo || {},
 
       status,
-      scheduledFor,
+      scheduledFor: null,
       publishedAt,
 
       isFeatured: params.data.isFeatured ?? false,
