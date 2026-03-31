@@ -165,6 +165,45 @@ async function validatePostMediaReferences(params: {
   }
 }
 
+async function validateCoverImageReference(params: {
+  tenantId: string
+  coverImageMediaId?: string | null
+  coverImageUrl?: string | null
+}) {
+  if (!params.coverImageMediaId) return
+
+  const oid = toObjectId(params.coverImageMediaId)
+  if (!oid) {
+    throw Object.assign(new Error("coverImageMediaId is invalid"), { status: 400 })
+  }
+
+  const media = await Media.findOne({
+    _id: oid,
+    tenantId: params.tenantId,
+  })
+    .select("_id kind status url")
+    .lean()
+
+  if (!media) {
+    throw Object.assign(new Error("Featured image media does not exist"), { status: 400 })
+  }
+
+  if (media.status !== "ready") {
+    throw Object.assign(new Error("Featured image media is not ready"), { status: 400 })
+  }
+
+  if (media.kind !== "image") {
+    throw Object.assign(new Error("Featured image media must be an image"), { status: 400 })
+  }
+
+  if (params.coverImageUrl && media.url !== params.coverImageUrl) {
+    throw Object.assign(
+      new Error("Featured image url does not match stored media"),
+      { status: 400 }
+    )
+  }
+}
+
 export async function createPost(params: { tenantId: string; userId: string; data: any }) {
   const slug = normalizeSlug(params.data.slug || "")
   if (!slug || !isValidSlug(slug)) {
@@ -181,6 +220,12 @@ export async function createPost(params: { tenantId: string; userId: string; dat
     content: params.data.content || [],
   })
 
+  await validateCoverImageReference({
+    tenantId: params.tenantId,
+    coverImageMediaId: params.data.coverImageMediaId,
+    coverImageUrl: params.data.coverImageUrl,
+  })
+
   try {
     const doc = await Post.create({
       tenantId: params.tenantId,
@@ -189,7 +234,14 @@ export async function createPost(params: { tenantId: string; userId: string; dat
       excerpt: params.data.excerpt,
       content: params.data.content || [],
       tags: params.data.tags || [],
-      coverImageUrl: params.data.coverImageUrl ?? null,
+      category:
+        typeof params.data.category === "string" && params.data.category.trim()
+        ? params.data.category.trim().toLowerCase()
+        : "blog",
+      commentsEnabled: params.data.commentsEnabled ?? true,
+      requireValidationToPublish: params.data.requireValidationToPublish ?? true,
+      coverImageUrl: params.data.coverImageUrl?.trim() ? params.data.coverImageUrl : null,
+      coverImageMediaId: params.data.coverImageMediaId?.trim() ? params.data.coverImageMediaId : null,
       seo: params.data.seo || {},
 
       status,
@@ -273,6 +325,20 @@ export async function updatePost(params: { tenantId: string; userId: string; id:
     update.slug = slug
   }
 
+  if (typeof update.category === "string") {
+    update.category = update.category.trim().toLowerCase()
+    if (!update.category) update.category = "blog"
+  }
+
+  if (typeof update.coverImageUrl === "string") {
+    update.coverImageUrl = update.coverImageUrl.trim()
+    if (!update.coverImageUrl) update.coverImageUrl = null
+  }
+
+  if (typeof update.coverImageMediaId === "string") {
+    update.coverImageMediaId = update.coverImageMediaId.trim()
+    if (!update.coverImageMediaId) update.coverImageMediaId = null
+  }
   if (typeof update.featuredExpiresAt === "string") update.featuredExpiresAt = new Date(update.featuredExpiresAt)
   if (update.featuredExpiresAt === undefined) delete update.featuredExpiresAt
 
@@ -283,6 +349,13 @@ export async function updatePost(params: { tenantId: string; userId: string; id:
     })
   }
 
+  if (update.coverImageMediaId !== undefined || update.coverImageUrl !== undefined) {
+    await validateCoverImageReference({
+      tenantId: params.tenantId,
+      coverImageMediaId: update.coverImageMediaId,
+      coverImageUrl: update.coverImageUrl,
+    })
+  }
   try {
     const doc = await Post.findOneAndUpdate(
       { _id: oid, tenantId: params.tenantId },

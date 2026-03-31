@@ -1,4 +1,4 @@
-import { nullable, z } from "zod"
+import { z } from "zod"
 import {
   IMAGE_MIME_TYPES,
   DOCUMENT_MIME_TYPES,
@@ -183,12 +183,16 @@ const basePostSchema = z.object({
   excerpt: z.string().max(500).optional(),
   content: z.array(contentBlockSchema).optional(),
   tags: z.array(z.string().max(50)).optional(),
+  category: z.string().min(1).max(50).optional(),
+  commentsEnabled: z.boolean().optional(),
+  requireValidationToPublish: z.boolean().optional(),
+  coverImageMediaId: z.string().min(1).optional(),
   coverImageUrl: z.string().url().optional(),
   isFeatured: z.boolean().optional(),
   featuredRank: z.number().int().min(0).max(9999).optional(),
   featuredExpiresAt: z.string().datetime().optional(),
   seo: seoSchema,
-  status: z.enum(["draft", "published"]).optional(),
+  status: z.enum(["draft", "published", "scheduled", "archived"]).optional(),
   scheduledFor: z.string().datetime().optional(),
 })
 

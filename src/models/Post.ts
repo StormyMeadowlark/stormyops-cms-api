@@ -81,9 +81,19 @@ const PostSchema = new Schema(
       default: [],
       index: true,
     },
-
+    category: {
+       type: String,
+       default: "blog",
+       trim: true
+      },
+    commentsEnabled: {
+      type: Boolean,
+      default: true 
+    },
+    
     coverImageUrl: { type: String, default: null },
-
+    coverImageMediaId: { type: Types.ObjectId, ref: "Media", default: null },
+    requireValidationToPublish: { type: Boolean, default: true },
     isFeatured: { type: Boolean, default: false, index: true },
     featuredRank: { type: Number, default: 0, index: true }, // lower = higher
     featuredExpiresAt: { type: Date, default: null },
