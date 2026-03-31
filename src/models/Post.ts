@@ -16,7 +16,10 @@ const SeoSchema = new Schema(
     metaDescription: String,
     ogTitle: String,
     ogDescription: String,
-    ogImageUrl: String,
+    ogImage: {
+      url: { type: String, default: null },
+      mediaId: { type: Schema.Types.ObjectId, ref: "Media", default: null },
+    },
     canonicalUrl: String,
     noindex: { type: Boolean, default: false },
   },

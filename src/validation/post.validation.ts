@@ -171,7 +171,12 @@ export const seoSchema = z
     metaDescription: z.string().max(300).optional(),
     ogTitle: z.string().max(120).optional(),
     ogDescription: z.string().max(300).optional(),
-    ogImageUrl: z.string().url().optional(),
+    ogImage: z
+      .object({
+        url: z.string().url().optional(),
+        mediaId: z.string().min(1).optional(),
+      })
+      .optional(),
     canonicalUrl: z.string().url().optional(),
     noindex: z.boolean().optional(),
   })

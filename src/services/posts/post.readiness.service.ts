@@ -1,3 +1,6 @@
+import { Media } from "../../models/Media"
+import { isValidSlug } from "../../utils/slug"
+
 export type ReadinessSeverity = "blocking" | "error" | "warning"
 
 export type ReadinessRuleCode =
@@ -53,6 +56,28 @@ export type PostReadinessSettings = {
   validationEnabled?: boolean
   blockOnErrors?: boolean
   enabledRules?: Partial<Record<ReadinessRuleCode, boolean>>
+}
+
+export type ReadinessPost = {
+  title?: string | null
+  slug?: string | null
+  excerpt?: string | null
+  content?: any[] | null
+  category?: string | null
+  coverImageUrl?: string | null
+  coverImageMediaId?: string | null
+  seo?: {
+    metaTitle?: string | null
+    metaDescription?: string | null
+    ogTitle?: string | null
+    ogDescription?: string | null
+    ogImage?: {
+      url?: string | null
+      mediaId?: string | null
+    } | null
+    canonicalUrl?: string | null
+    noindex?: boolean | null
+  } | null
 }
 
 export const DEFAULT_READINESS_RULES: Record<ReadinessRuleCode, ReadinessRuleConfig> = {
@@ -120,7 +145,7 @@ export const DEFAULT_READINESS_RULES: Record<ReadinessRuleCode, ReadinessRuleCon
   og_image_missing: {
     severity: "error",
     enabledByDefault: false,
-    field: "seo.ogImageUrl",
+    field: "seo.ogImage",
   },
 
   post_title_under: {
@@ -186,6 +211,391 @@ export const DEFAULT_READINESS_RULES: Record<ReadinessRuleCode, ReadinessRuleCon
   og_image_wrong_dimensions: {
     severity: "warning",
     enabledByDefault: false,
-    field: "seo.ogImageUrl",
+    field: "seo.ogImage.mediaId",
   },
+}
+
+function isRuleEnabled(
+  code: ReadinessRuleCode,
+  settings?: PostReadinessSettings
+) {
+  if (settings?.enabledRules && code in settings.enabledRules) {
+    return settings.enabledRules[code] ?? DEFAULT_READINESS_RULES[code].enabledByDefault
+  }
+
+  return DEFAULT_READINESS_RULES[code].enabledByDefault
+}
+
+function createIssue(
+  code: ReadinessRuleCode,
+  message: string
+): ReadinessIssue {
+  const rule = DEFAULT_READINESS_RULES[code]
+
+  return {
+    code,
+    severity: rule.severity,
+    message,
+    field: rule.field,
+  }
+}
+
+function getTextLength(value?: string | null) {
+  return value?.trim().length ?? 0
+}
+
+function hasContent(content?: any[] | null) {
+  return Array.isArray(content) && content.length > 0
+}
+
+function hasFeaturedImage(post: ReadinessPost) {
+  return Boolean(post.coverImageMediaId || post.coverImageUrl)
+}
+
+function getEffectiveOgImageUrl(post: ReadinessPost) {
+  return post.seo?.ogImage?.url || post.coverImageUrl || null
+}
+
+function requiresFeaturedImage(post: ReadinessPost) {
+  return post.category === "blog"
+}
+
+function splitIssuesBySeverity(issues: ReadinessIssue[]) {
+  return {
+    blocking: issues.filter((issue) => issue.severity === "blocking"),
+    errors: issues.filter((issue) => issue.severity === "error"),
+    warnings: issues.filter((issue) => issue.severity === "warning"),
+  }
+}
+
+async function getFeaturedImageMedia(post: ReadinessPost) {
+  if (!post.coverImageMediaId) return null
+
+  return Media.findById(post.coverImageMediaId)
+    .select("_id url width height defaultAlt kind status")
+    .lean()
+}
+
+async function getOgImageMedia(post: ReadinessPost) {
+  const mediaId = post.seo?.ogImage?.mediaId
+  if (!mediaId) return null
+
+  return Media.findById(mediaId)
+    .select("_id url width height defaultAlt kind status")
+    .lean()
+}
+
+function hasRecommendedOgDimensions(
+  width?: number | null,
+  height?: number | null
+) {
+  return width === 1200 && height === 630
+}
+
+export async function evaluatePostReadiness(
+  post: ReadinessPost,
+  settings?: PostReadinessSettings
+): Promise<PostReadinessResult> {
+  const issues: ReadinessIssue[] = []
+
+  const titleLength = getTextLength(post.title)
+  const seoTitleLength = getTextLength(post.seo?.metaTitle)
+  const metaDescriptionLength = getTextLength(post.seo?.metaDescription)
+  const contentSnippetLength = getTextLength(post.excerpt)
+  const ogTitleLength = getTextLength(post.seo?.ogTitle)
+  const ogDescriptionLength = getTextLength(post.seo?.ogDescription)
+
+  const featuredImageMedia = await getFeaturedImageMedia(post)
+  const ogImageMedia = await getOgImageMedia(post)
+  const effectiveOgImageUrl = getEffectiveOgImageUrl(post)
+
+  // Blocking
+
+  if (isRuleEnabled("post_title_missing", settings) && titleLength === 0) {
+    issues.push(createIssue("post_title_missing", "Post title is required."))
+  }
+
+  if (isRuleEnabled("slug_missing", settings) && getTextLength(post.slug) === 0) {
+    issues.push(createIssue("slug_missing", "Slug is required."))
+  }
+
+  if (
+    isRuleEnabled("slug_invalid", settings) &&
+    getTextLength(post.slug) > 0 &&
+    !isValidSlug(post.slug!.trim())
+  ) {
+    issues.push(createIssue("slug_invalid", "Slug format is invalid."))
+  }
+
+  if (isRuleEnabled("content_missing", settings) && !hasContent(post.content)) {
+    issues.push(createIssue("content_missing", "Post content is required."))
+  }
+
+  if (
+    isRuleEnabled("featured_image_conditionally_missing", settings) &&
+    requiresFeaturedImage(post) &&
+    !hasFeaturedImage(post)
+  ) {
+    issues.push(
+      createIssue(
+        "featured_image_conditionally_missing",
+        "A featured image is required for this post type."
+      )
+    )
+  }
+
+  // Errors
+
+  if (
+    isRuleEnabled("featured_image_wrong_dimensions", settings) &&
+    featuredImageMedia &&
+    !hasRecommendedOgDimensions(featuredImageMedia.width, featuredImageMedia.height)
+  ) {
+    issues.push(
+      createIssue(
+        "featured_image_wrong_dimensions",
+        "Featured image should be 1200 x 630 pixels."
+      )
+    )
+  }
+
+  if (
+    isRuleEnabled("featured_image_missing_alt_text", settings) &&
+    featuredImageMedia &&
+    !getTextLength(featuredImageMedia.defaultAlt)
+  ) {
+    issues.push(
+      createIssue(
+        "featured_image_missing_alt_text",
+        "Featured image is missing alt text."
+      )
+    )
+  }
+
+  if (isRuleEnabled("seo_title_missing", settings) && seoTitleLength === 0) {
+    issues.push(createIssue("seo_title_missing", "SEO title is missing."))
+  }
+
+  if (
+    isRuleEnabled("meta_description_missing", settings) &&
+    metaDescriptionLength === 0
+  ) {
+    issues.push(
+      createIssue("meta_description_missing", "Meta description is missing.")
+    )
+  }
+
+  if (
+    isRuleEnabled("content_snippet_missing", settings) &&
+    contentSnippetLength === 0
+  ) {
+    issues.push(
+      createIssue("content_snippet_missing", "Content snippet is missing.")
+    )
+  }
+
+  if (isRuleEnabled("og_title_missing", settings) && ogTitleLength === 0) {
+    issues.push(createIssue("og_title_missing", "OG title is missing."))
+  }
+
+  if (
+    isRuleEnabled("og_description_missing", settings) &&
+    ogDescriptionLength === 0
+  ) {
+    issues.push(
+      createIssue("og_description_missing", "OG description is missing.")
+    )
+  }
+
+  if (isRuleEnabled("og_image_missing", settings) && !effectiveOgImageUrl) {
+    issues.push(createIssue("og_image_missing", "OG image is missing."))
+  }
+
+  // Warnings
+
+  if (isRuleEnabled("post_title_under", settings) && titleLength > 0 && titleLength < 30) {
+    issues.push(
+      createIssue(
+        "post_title_under",
+        "Post title is shorter than the recommended length."
+      )
+    )
+  }
+
+  if (isRuleEnabled("post_title_over", settings) && titleLength > 100) {
+    issues.push(
+      createIssue(
+        "post_title_over",
+        "Post title is longer than the recommended length."
+      )
+    )
+  }
+
+  if (
+    isRuleEnabled("seo_title_under", settings) &&
+    seoTitleLength > 0 &&
+    seoTitleLength < 30
+  ) {
+    issues.push(
+      createIssue(
+        "seo_title_under",
+        "SEO title is shorter than the recommended length."
+      )
+    )
+  }
+
+  if (isRuleEnabled("seo_title_over", settings) && seoTitleLength > 60) {
+    issues.push(
+      createIssue(
+        "seo_title_over",
+        "SEO title is longer than the recommended length."
+      )
+    )
+  }
+
+  if (
+    isRuleEnabled("meta_description_under", settings) &&
+    metaDescriptionLength > 0 &&
+    metaDescriptionLength < 50
+  ) {
+    issues.push(
+      createIssue(
+        "meta_description_under",
+        "Meta description is shorter than the recommended length."
+      )
+    )
+  }
+
+  if (
+    isRuleEnabled("meta_description_over", settings) &&
+    metaDescriptionLength > 160
+  ) {
+    issues.push(
+      createIssue(
+        "meta_description_over",
+        "Meta description is longer than the recommended length."
+      )
+    )
+  }
+
+  if (
+    isRuleEnabled("content_snippet_under", settings) &&
+    contentSnippetLength > 0 &&
+    contentSnippetLength < 50
+  ) {
+    issues.push(
+      createIssue(
+        "content_snippet_under",
+        "Content snippet is shorter than the recommended length."
+      )
+    )
+  }
+
+  if (
+    isRuleEnabled("content_snippet_over", settings) &&
+    contentSnippetLength > 220
+  ) {
+    issues.push(
+      createIssue(
+        "content_snippet_over",
+        "Content snippet is longer than the recommended length."
+      )
+    )
+  }
+
+  if (
+    isRuleEnabled("og_title_under", settings) &&
+    ogTitleLength > 0 &&
+    ogTitleLength < 30
+  ) {
+    issues.push(
+      createIssue(
+        "og_title_under",
+        "OG title is shorter than the recommended length."
+      )
+    )
+  }
+
+  if (isRuleEnabled("og_title_over", settings) && ogTitleLength > 60) {
+    issues.push(
+      createIssue(
+        "og_title_over",
+        "OG title is longer than the recommended length."
+      )
+    )
+  }
+
+  if (
+    isRuleEnabled("og_description_under", settings) &&
+    ogDescriptionLength > 0 &&
+    ogDescriptionLength < 70
+  ) {
+    issues.push(
+      createIssue(
+        "og_description_under",
+        "OG description is shorter than the recommended length."
+      )
+    )
+  }
+
+  if (
+    isRuleEnabled("og_description_over", settings) &&
+    ogDescriptionLength > 180
+  ) {
+    issues.push(
+      createIssue(
+        "og_description_over",
+        "OG description is longer than the recommended length."
+      )
+    )
+  }
+
+  // explicit OG image
+  if (
+    isRuleEnabled("og_image_wrong_dimensions", settings) &&
+    ogImageMedia &&
+    !hasRecommendedOgDimensions(ogImageMedia.width, ogImageMedia.height)
+  ) {
+    issues.push(
+      createIssue(
+        "og_image_wrong_dimensions",
+        "OG image should be 1200 x 630 pixels."
+      )
+    )
+  }
+
+  // fallback OG image from featured image
+  if (
+    isRuleEnabled("og_image_wrong_dimensions", settings) &&
+    !ogImageMedia &&
+    featuredImageMedia &&
+    effectiveOgImageUrl === featuredImageMedia.url &&
+    !hasRecommendedOgDimensions(featuredImageMedia.width, featuredImageMedia.height)
+  ) {
+    issues.push(
+      createIssue(
+        "og_image_wrong_dimensions",
+        "OG image should be 1200 x 630 pixels."
+      )
+    )
+  }
+
+  const { blocking, errors, warnings } = splitIssuesBySeverity(issues)
+
+  const validationEnabled = settings?.validationEnabled ?? true
+  const blockOnErrors = settings?.blockOnErrors ?? false
+
+  const isPublishable = !validationEnabled
+    ? true
+    : blockOnErrors
+      ? blocking.length === 0 && errors.length === 0
+      : blocking.length === 0
+
+  return {
+    isPublishable,
+    issues,
+    blocking,
+    errors,
+    warnings,
+  }
 }
