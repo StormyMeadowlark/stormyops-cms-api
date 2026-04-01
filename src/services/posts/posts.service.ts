@@ -2,6 +2,10 @@ import { Types } from "mongoose"
 import { Media } from "../../models/Media"
 import { Post } from "../../models/Post"
 import { normalizeSlug, isValidSlug } from "../../utils/slug"
+import { getOrCreateSettings } from "../settings/settings.service"
+import { mapSettingsToReadiness } from "../settings/settings-to-readiness"
+import { evaluatePostReadiness } from "./post.readiness.service"
+
 
 function isDuplicateKeyError(err: any) {
   return err && (err.code === 11000 || err.codeName === "DuplicateKey")
@@ -96,6 +100,54 @@ function collectMediaRefsFromContent(content: any[] = []) {
   }
 
   return refs
+}
+
+function normalizeSeo(seo: any) {
+  if (!seo) return {}
+
+  const normalized: any = {
+    ...seo,
+  }
+
+  if (typeof normalized.metaTitle === "string") {
+    normalized.metaTitle = normalized.metaTitle.trim()
+    if (!normalized.metaTitle) normalized.metaTitle = null
+  }
+
+  if (typeof normalized.metaDescription === "string") {
+    normalized.metaDescription = normalized.metaDescription.trim()
+    if (!normalized.metaDescription) normalized.metaDescription = null
+  }
+
+  if (typeof normalized.ogTitle === "string") {
+    normalized.ogTitle = normalized.ogTitle.trim()
+    if (!normalized.ogTitle) normalized.ogTitle = null
+  }
+
+  if (typeof normalized.ogDescription === "string") {
+    normalized.ogDescription = normalized.ogDescription.trim()
+    if (!normalized.ogDescription) normalized.ogDescription = null
+  }
+
+  if (typeof normalized.canonicalUrl === "string") {
+    normalized.canonicalUrl = normalized.canonicalUrl.trim()
+    if (!normalized.canonicalUrl) normalized.canonicalUrl = null
+  }
+
+  if (normalized.ogImage) {
+    normalized.ogImage = {
+      url:
+        typeof normalized.ogImage.url === "string" && normalized.ogImage.url.trim()
+          ? normalized.ogImage.url.trim()
+          : null,
+      mediaId:
+        typeof normalized.ogImage.mediaId === "string" && normalized.ogImage.mediaId.trim()
+          ? normalized.ogImage.mediaId.trim()
+          : null,
+    }
+  }
+
+  return normalized
 }
 
 async function validatePostMediaReferences(params: {
@@ -204,6 +256,89 @@ async function validateCoverImageReference(params: {
   }
 }
 
+async function validateOgImageReference(params: {
+  tenantId: string
+  ogImageMediaId?: string | null
+  ogImageUrl?: string | null
+}) {
+  if (!params.ogImageMediaId) return
+
+  const oid = toObjectId(params.ogImageMediaId)
+  if (!oid) {
+    throw Object.assign(new Error("seo.ogImage.mediaId is invalid"), { status: 400 })
+  }
+
+  const media = await Media.findOne({
+    _id: oid,
+    tenantId: params.tenantId,
+  })
+    .select("_id kind status url")
+    .lean()
+
+  if (!media) {
+    throw Object.assign(new Error("OG image media does not exist"), { status: 400 })
+  }
+
+  if (media.status !== "ready") {
+    throw Object.assign(new Error("OG image media is not ready"), { status: 400 })
+  }
+
+  if (media.kind !== "image") {
+    throw Object.assign(new Error("OG image media must be an image"), { status: 400 })
+  }
+
+  if (params.ogImageUrl && media.url !== params.ogImageUrl) {
+    throw Object.assign(
+      new Error("OG image url does not match stored media"),
+      { status: 400 }
+    )
+  }
+}
+
+async function assertPostCanProceed(params: {
+  tenantId: string
+  post: any
+  forAction: "publish" | "schedule"
+}) {
+  if (!params.post.requireValidationToPublish) return
+
+  const settings = await getOrCreateSettings(params.tenantId)
+  const readinessSettings = mapSettingsToReadiness(settings)
+  const readiness = await evaluatePostReadiness(params.post, readinessSettings)
+
+  if (!readiness.isPublishable) {
+    throw Object.assign(
+      new Error(`Post cannot ${params.forAction} because validation failed`),
+      {
+        status: 409,
+        details: readiness,
+      }
+    )
+  }
+
+  if (
+    params.forAction === "publish" &&
+    !settings.publishing.allowPublishWithWarnings &&
+    readiness.warnings.length > 0
+  ) {
+    throw Object.assign(
+      new Error("Post cannot publish because warnings are not allowed by settings"),
+      { status: 409, details: readiness }
+    )
+  }
+
+  if (
+    params.forAction === "schedule" &&
+    !settings.publishing.allowScheduleWithWarnings &&
+    readiness.warnings.length > 0
+  ) {
+    throw Object.assign(
+      new Error("Post cannot schedule because warnings are not allowed by settings"),
+      { status: 409, details: readiness }
+    )
+  }
+}
+
 export async function createPost(params: { tenantId: string; userId: string; data: any }) {
   const slug = normalizeSlug(params.data.slug || "")
   if (!slug || !isValidSlug(slug)) {
@@ -212,8 +347,9 @@ export async function createPost(params: { tenantId: string; userId: string; dat
 
   const status = params.data.status || "draft"
   const now = new Date()
-
   const publishedAt = status === "published" ? now : null
+
+  const seo = normalizeSeo(params.data.seo)
 
   await validatePostMediaReferences({
     tenantId: params.tenantId,
@@ -226,6 +362,12 @@ export async function createPost(params: { tenantId: string; userId: string; dat
     coverImageUrl: params.data.coverImageUrl,
   })
 
+  await validateOgImageReference({
+    tenantId: params.tenantId,
+    ogImageMediaId: seo.ogImage?.mediaId,
+    ogImageUrl: seo.ogImage?.url,
+  })
+
   try {
     const doc = await Post.create({
       tenantId: params.tenantId,
@@ -236,13 +378,15 @@ export async function createPost(params: { tenantId: string; userId: string; dat
       tags: params.data.tags || [],
       category:
         typeof params.data.category === "string" && params.data.category.trim()
-        ? params.data.category.trim().toLowerCase()
-        : "blog",
+          ? params.data.category.trim().toLowerCase()
+          : "blog",
       commentsEnabled: params.data.commentsEnabled ?? true,
       requireValidationToPublish: params.data.requireValidationToPublish ?? true,
-      coverImageUrl: params.data.coverImageUrl?.trim() ? params.data.coverImageUrl : null,
-      coverImageMediaId: params.data.coverImageMediaId?.trim() ? params.data.coverImageMediaId : null,
-      seo: params.data.seo || {},
+      coverImageUrl: params.data.coverImageUrl?.trim() ? params.data.coverImageUrl.trim() : null,
+      coverImageMediaId: params.data.coverImageMediaId?.trim()
+        ? params.data.coverImageMediaId.trim()
+        : null,
+      seo,
 
       status,
       scheduledFor: null,
@@ -321,7 +465,9 @@ export async function updatePost(params: { tenantId: string; userId: string; id:
 
   if (typeof update.slug === "string") {
     const slug = normalizeSlug(update.slug)
-    if (!slug || !isValidSlug(slug)) throw Object.assign(new Error("Invalid slug"), { status: 400 })
+    if (!slug || !isValidSlug(slug)) {
+      throw Object.assign(new Error("Invalid slug"), { status: 400 })
+    }
     update.slug = slug
   }
 
@@ -339,7 +485,14 @@ export async function updatePost(params: { tenantId: string; userId: string; id:
     update.coverImageMediaId = update.coverImageMediaId.trim()
     if (!update.coverImageMediaId) update.coverImageMediaId = null
   }
-  if (typeof update.featuredExpiresAt === "string") update.featuredExpiresAt = new Date(update.featuredExpiresAt)
+
+  if (update.seo !== undefined) {
+    update.seo = normalizeSeo(update.seo)
+  }
+
+  if (typeof update.featuredExpiresAt === "string") {
+    update.featuredExpiresAt = new Date(update.featuredExpiresAt)
+  }
   if (update.featuredExpiresAt === undefined) delete update.featuredExpiresAt
 
   if (update.content !== undefined) {
@@ -356,6 +509,15 @@ export async function updatePost(params: { tenantId: string; userId: string; id:
       coverImageUrl: update.coverImageUrl,
     })
   }
+
+  if (update.seo?.ogImage) {
+    await validateOgImageReference({
+      tenantId: params.tenantId,
+      ogImageMediaId: update.seo.ogImage.mediaId,
+      ogImageUrl: update.seo.ogImage.url,
+    })
+  }
+
   try {
     const doc = await Post.findOneAndUpdate(
       { _id: oid, tenantId: params.tenantId },

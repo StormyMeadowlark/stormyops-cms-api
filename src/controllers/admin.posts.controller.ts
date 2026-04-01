@@ -259,3 +259,22 @@ export async function scheduleAdminPost(req: Request, res: Response, next: NextF
     next(err)
   }
 }
+
+export async function getAdminPostReadiness(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tenantId = (req as any).tenantId as string | undefined
+    if (!tenantId) return res.status(400).json({ message: "Tenant missing" })
+
+    const id = req.params.id
+    if (!id) return res.status(400).json({ message: "Id required" })
+
+    const post = await getAdminPostById({ tenantId, id })
+    const settings = await getOrCreateSettings(tenantId)
+    const readinessSettings = mapSettingsToReadiness(settings)
+    const result = await evaluatePostReadiness(post, readinessSettings)
+
+    return res.json(result)
+  } catch (err) {
+    next(err)
+  }
+}

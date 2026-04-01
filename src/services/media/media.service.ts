@@ -243,15 +243,17 @@ async function isMediaInUse(params: {
     $or: [
       { "content.data.mediaId": params.mediaId },
       { "content.data.images.mediaId": params.mediaId },
+      { coverImageMediaId: params.mediaId },
+      { "seo.ogImage.mediaId": params.mediaId },
       ...(params.mediaUrl
         ? [
             { coverImageUrl: params.mediaUrl },
-            { "seo.ogImageUrl": params.mediaUrl },
+            { "seo.ogImage.url": params.mediaUrl },
           ]
         : []),
     ],
   })
-    .select("_id title slug content coverImageUrl seo")
+    .select("_id title slug content coverImageUrl coverImageMediaId seo")
     .lean()
 
   if (!doc) return null
@@ -272,9 +274,15 @@ async function isMediaInUse(params: {
 
   if (usedInContent) {
     usageType = "content"
-  } else if (params.mediaUrl && doc.coverImageUrl === params.mediaUrl) {
+  } else if (
+    doc.coverImageMediaId?.toString?.() === params.mediaId ||
+    (params.mediaUrl && doc.coverImageUrl === params.mediaUrl)
+  ) {
     usageType = "coverImage"
-  } else if (params.mediaUrl && doc.seo?.ogImageUrl === params.mediaUrl) {
+  } else if (
+    doc.seo?.ogImage?.mediaId?.toString?.() === params.mediaId ||
+    (params.mediaUrl && doc.seo?.ogImage?.url === params.mediaUrl)
+  ) {
     usageType = "ogImage"
   }
 

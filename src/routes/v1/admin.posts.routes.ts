@@ -2,7 +2,7 @@ import { Router } from "express"
 import { requireTenant } from "../../middleware/requireTenant"
 import { requireAuth } from "../../middleware/requireAuth"
 import { requireRole } from "../../middleware/requireRole"
-import { listAdminPostsController, getAdminPost, createAdminPost, patchAdminPost, deleteAdminPost, publishAdminPost, unpublishAdminPost, archiveAdminPost, unarchiveAdminPost, scheduleAdminPost } from "../../controllers/admin.posts.controller"
+import { listAdminPostsController, getAdminPost, createAdminPost, patchAdminPost, deleteAdminPost, publishAdminPost, unpublishAdminPost, archiveAdminPost, unarchiveAdminPost, scheduleAdminPost, getAdminPostReadiness } from "../../controllers/admin.posts.controller"
 
 const router = Router()
 
@@ -37,5 +37,8 @@ router.post("/:id/unarchive", requireTenant, requireAuth, requireRole("admin", "
 
 // POST /api/v1/admin/posts/:id/schedule
 router.post("/:id/schedule", requireTenant, requireAuth, requireRole("admin", "editor"), scheduleAdminPost)
+
+// GET /api/v1/admin/posts/:id/readiness
+router.get("/:id/readiness", requireTenant, requireAuth, requireRole("admin", "editor"), getAdminPostReadiness)
 
 export default router
