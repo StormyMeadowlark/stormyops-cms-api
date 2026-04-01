@@ -52,10 +52,25 @@ export type ReadinessRuleConfig = {
   field?: string
 }
 
+export type LengthThresholdRange = {
+  under?: number
+  over?: number
+}
+
+export type LengthThresholds = {
+  postTitle?: LengthThresholdRange
+  seoTitle?: LengthThresholdRange
+  metaDescription?: LengthThresholdRange
+  contentSnippet?: LengthThresholdRange
+  ogTitle?: LengthThresholdRange
+  ogDescription?: LengthThresholdRange
+}
+
 export type PostReadinessSettings = {
   validationEnabled?: boolean
   blockOnErrors?: boolean
   enabledRules?: Partial<Record<ReadinessRuleCode, boolean>>
+  thresholds?: LengthThresholds
 }
 
 export type ReadinessPost = {
@@ -215,10 +230,7 @@ export const DEFAULT_READINESS_RULES: Record<ReadinessRuleCode, ReadinessRuleCon
   },
 }
 
-function isRuleEnabled(
-  code: ReadinessRuleCode,
-  settings?: PostReadinessSettings
-) {
+function isRuleEnabled(code: ReadinessRuleCode, settings?: PostReadinessSettings) {
   if (settings?.enabledRules && code in settings.enabledRules) {
     return settings.enabledRules[code] ?? DEFAULT_READINESS_RULES[code].enabledByDefault
   }
@@ -226,10 +238,7 @@ function isRuleEnabled(
   return DEFAULT_READINESS_RULES[code].enabledByDefault
 }
 
-function createIssue(
-  code: ReadinessRuleCode,
-  message: string
-): ReadinessIssue {
+function createIssue(code: ReadinessRuleCode, message: string): ReadinessIssue {
   const rule = DEFAULT_READINESS_RULES[code]
 
   return {
@@ -285,11 +294,23 @@ async function getOgImageMedia(post: ReadinessPost) {
     .lean()
 }
 
-function hasRecommendedOgDimensions(
-  width?: number | null,
-  height?: number | null
-) {
+function hasRecommendedOgDimensions(width?: number | null, height?: number | null) {
   return width === 1200 && height === 630
+}
+
+function getThreshold(
+  settings: PostReadinessSettings | undefined,
+  field:
+    | "postTitle"
+    | "seoTitle"
+    | "metaDescription"
+    | "contentSnippet"
+    | "ogTitle"
+    | "ogDescription",
+  bound: "under" | "over",
+  fallback: number
+) {
+  return settings?.thresholds?.[field]?.[bound] ?? fallback
 }
 
 export async function evaluatePostReadiness(
@@ -308,6 +329,24 @@ export async function evaluatePostReadiness(
   const featuredImageMedia = await getFeaturedImageMedia(post)
   const ogImageMedia = await getOgImageMedia(post)
   const effectiveOgImageUrl = getEffectiveOgImageUrl(post)
+
+  const postTitleUnder = getThreshold(settings, "postTitle", "under", 30)
+  const postTitleOver = getThreshold(settings, "postTitle", "over", 100)
+
+  const seoTitleUnder = getThreshold(settings, "seoTitle", "under", 30)
+  const seoTitleOver = getThreshold(settings, "seoTitle", "over", 60)
+
+  const metaDescriptionUnder = getThreshold(settings, "metaDescription", "under", 50)
+  const metaDescriptionOver = getThreshold(settings, "metaDescription", "over", 160)
+
+  const contentSnippetUnder = getThreshold(settings, "contentSnippet", "under", 50)
+  const contentSnippetOver = getThreshold(settings, "contentSnippet", "over", 220)
+
+  const ogTitleUnder = getThreshold(settings, "ogTitle", "under", 30)
+  const ogTitleOver = getThreshold(settings, "ogTitle", "over", 60)
+
+  const ogDescriptionUnder = getThreshold(settings, "ogDescription", "under", 70)
+  const ogDescriptionOver = getThreshold(settings, "ogDescription", "over", 180)
 
   // Blocking
 
@@ -376,35 +415,20 @@ export async function evaluatePostReadiness(
     issues.push(createIssue("seo_title_missing", "SEO title is missing."))
   }
 
-  if (
-    isRuleEnabled("meta_description_missing", settings) &&
-    metaDescriptionLength === 0
-  ) {
-    issues.push(
-      createIssue("meta_description_missing", "Meta description is missing.")
-    )
+  if (isRuleEnabled("meta_description_missing", settings) && metaDescriptionLength === 0) {
+    issues.push(createIssue("meta_description_missing", "Meta description is missing."))
   }
 
-  if (
-    isRuleEnabled("content_snippet_missing", settings) &&
-    contentSnippetLength === 0
-  ) {
-    issues.push(
-      createIssue("content_snippet_missing", "Content snippet is missing.")
-    )
+  if (isRuleEnabled("content_snippet_missing", settings) && contentSnippetLength === 0) {
+    issues.push(createIssue("content_snippet_missing", "Content snippet is missing."))
   }
 
   if (isRuleEnabled("og_title_missing", settings) && ogTitleLength === 0) {
     issues.push(createIssue("og_title_missing", "OG title is missing."))
   }
 
-  if (
-    isRuleEnabled("og_description_missing", settings) &&
-    ogDescriptionLength === 0
-  ) {
-    issues.push(
-      createIssue("og_description_missing", "OG description is missing.")
-    )
+  if (isRuleEnabled("og_description_missing", settings) && ogDescriptionLength === 0) {
+    issues.push(createIssue("og_description_missing", "OG description is missing."))
   }
 
   if (isRuleEnabled("og_image_missing", settings) && !effectiveOgImageUrl) {
@@ -413,42 +437,38 @@ export async function evaluatePostReadiness(
 
   // Warnings
 
-  if (isRuleEnabled("post_title_under", settings) && titleLength > 0 && titleLength < 30) {
+  if (isRuleEnabled("post_title_under", settings) && titleLength > 0 && titleLength < postTitleUnder) {
     issues.push(
       createIssue(
         "post_title_under",
-        "Post title is shorter than the recommended length."
+        `Post title is shorter than the recommended length (${postTitleUnder}+ characters).`
       )
     )
   }
 
-  if (isRuleEnabled("post_title_over", settings) && titleLength > 100) {
+  if (isRuleEnabled("post_title_over", settings) && titleLength > postTitleOver) {
     issues.push(
       createIssue(
         "post_title_over",
-        "Post title is longer than the recommended length."
+        `Post title is longer than the recommended length (${postTitleOver} characters max).`
       )
     )
   }
 
-  if (
-    isRuleEnabled("seo_title_under", settings) &&
-    seoTitleLength > 0 &&
-    seoTitleLength < 30
-  ) {
+  if (isRuleEnabled("seo_title_under", settings) && seoTitleLength > 0 && seoTitleLength < seoTitleUnder) {
     issues.push(
       createIssue(
         "seo_title_under",
-        "SEO title is shorter than the recommended length."
+        `SEO title is shorter than the recommended length (${seoTitleUnder}+ characters).`
       )
     )
   }
 
-  if (isRuleEnabled("seo_title_over", settings) && seoTitleLength > 60) {
+  if (isRuleEnabled("seo_title_over", settings) && seoTitleLength > seoTitleOver) {
     issues.push(
       createIssue(
         "seo_title_over",
-        "SEO title is longer than the recommended length."
+        `SEO title is longer than the recommended length (${seoTitleOver} characters max).`
       )
     )
   }
@@ -456,24 +476,21 @@ export async function evaluatePostReadiness(
   if (
     isRuleEnabled("meta_description_under", settings) &&
     metaDescriptionLength > 0 &&
-    metaDescriptionLength < 50
+    metaDescriptionLength < metaDescriptionUnder
   ) {
     issues.push(
       createIssue(
         "meta_description_under",
-        "Meta description is shorter than the recommended length."
+        `Meta description is shorter than the recommended length (${metaDescriptionUnder}+ characters).`
       )
     )
   }
 
-  if (
-    isRuleEnabled("meta_description_over", settings) &&
-    metaDescriptionLength > 160
-  ) {
+  if (isRuleEnabled("meta_description_over", settings) && metaDescriptionLength > metaDescriptionOver) {
     issues.push(
       createIssue(
         "meta_description_over",
-        "Meta description is longer than the recommended length."
+        `Meta description is longer than the recommended length (${metaDescriptionOver} characters max).`
       )
     )
   }
@@ -481,46 +498,39 @@ export async function evaluatePostReadiness(
   if (
     isRuleEnabled("content_snippet_under", settings) &&
     contentSnippetLength > 0 &&
-    contentSnippetLength < 50
+    contentSnippetLength < contentSnippetUnder
   ) {
     issues.push(
       createIssue(
         "content_snippet_under",
-        "Content snippet is shorter than the recommended length."
+        `Content snippet is shorter than the recommended length (${contentSnippetUnder}+ characters).`
       )
     )
   }
 
-  if (
-    isRuleEnabled("content_snippet_over", settings) &&
-    contentSnippetLength > 220
-  ) {
+  if (isRuleEnabled("content_snippet_over", settings) && contentSnippetLength > contentSnippetOver) {
     issues.push(
       createIssue(
         "content_snippet_over",
-        "Content snippet is longer than the recommended length."
+        `Content snippet is longer than the recommended length (${contentSnippetOver} characters max).`
       )
     )
   }
 
-  if (
-    isRuleEnabled("og_title_under", settings) &&
-    ogTitleLength > 0 &&
-    ogTitleLength < 30
-  ) {
+  if (isRuleEnabled("og_title_under", settings) && ogTitleLength > 0 && ogTitleLength < ogTitleUnder) {
     issues.push(
       createIssue(
         "og_title_under",
-        "OG title is shorter than the recommended length."
+        `OG title is shorter than the recommended length (${ogTitleUnder}+ characters).`
       )
     )
   }
 
-  if (isRuleEnabled("og_title_over", settings) && ogTitleLength > 60) {
+  if (isRuleEnabled("og_title_over", settings) && ogTitleLength > ogTitleOver) {
     issues.push(
       createIssue(
         "og_title_over",
-        "OG title is longer than the recommended length."
+        `OG title is longer than the recommended length (${ogTitleOver} characters max).`
       )
     )
   }
@@ -528,24 +538,21 @@ export async function evaluatePostReadiness(
   if (
     isRuleEnabled("og_description_under", settings) &&
     ogDescriptionLength > 0 &&
-    ogDescriptionLength < 70
+    ogDescriptionLength < ogDescriptionUnder
   ) {
     issues.push(
       createIssue(
         "og_description_under",
-        "OG description is shorter than the recommended length."
+        `OG description is shorter than the recommended length (${ogDescriptionUnder}+ characters).`
       )
     )
   }
 
-  if (
-    isRuleEnabled("og_description_over", settings) &&
-    ogDescriptionLength > 180
-  ) {
+  if (isRuleEnabled("og_description_over", settings) && ogDescriptionLength > ogDescriptionOver) {
     issues.push(
       createIssue(
         "og_description_over",
-        "OG description is longer than the recommended length."
+        `OG description is longer than the recommended length (${ogDescriptionOver} characters max).`
       )
     )
   }

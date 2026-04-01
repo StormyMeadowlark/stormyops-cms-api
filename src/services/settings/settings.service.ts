@@ -1,19 +1,27 @@
 import { Settings } from "../../models/Settings"
 
-export async function getOrCreateSettings(tenantId: string) {
-  let doc = await Settings.findOne({ tenantId }).lean()
+function normalizeSettings(doc: any) {
+  if (!doc) return doc
 
-  if (!doc) {
-    const created = await Settings.create({
-      tenantId,
-      media: {
-        allowedMimeTypes: [],
-      },
-    })
-    doc = created.toObject()
+  const settings = typeof doc.toObject === "function" ? doc.toObject() : { ...doc }
+
+  const enabledRules = settings?.publishing?.enabledRules
+
+  if (enabledRules instanceof Map) {
+    settings.publishing.enabledRules = Object.fromEntries(enabledRules)
   }
 
-  return doc
+  return settings
+}
+
+export async function getOrCreateSettings(tenantId: string) {
+  let doc = await Settings.findOne({ tenantId })
+
+  if (!doc) {
+    doc = await Settings.create({ tenantId })
+  }
+
+  return normalizeSettings(doc)
 }
 
 export async function updateSettings(tenantId: string, patch: any) {
@@ -25,12 +33,13 @@ export async function updateSettings(tenantId: string, patch: any) {
       upsert: true,
       setDefaultsOnInsert: true,
     }
-  ).lean()
+  )
 
-  return doc
+  return normalizeSettings(doc)
 }
 
 export async function resetSettings(tenantId: string) {
   await Settings.deleteOne({ tenantId })
-  return getOrCreateSettings(tenantId)
+  const doc = await Settings.create({ tenantId })
+  return normalizeSettings(doc)
 }
