@@ -16,6 +16,8 @@ export function mapSettingsToReadiness(settings: any): PostReadinessSettings {
   return {
     validationEnabled: settings?.publishing?.validationEnabled ?? true,
     blockOnErrors: settings?.publishing?.blockOnErrors ?? false,
+    requireCategoryBeforePublishing:
+      settings?.publishing?.requireCategoryBeforePublishing ?? false,
     enabledRules: enabledRules as Partial<Record<ReadinessRuleCode, boolean>> | undefined,
     thresholds: {
       postTitle: {

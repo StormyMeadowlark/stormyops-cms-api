@@ -9,6 +9,7 @@ export type ReadinessRuleCode =
   | "post_title_missing"
   | "slug_missing"
   | "slug_invalid"
+  | "category_missing"
   | "featured_image_conditionally_missing"
   | "content_missing"
   | "featured_image_wrong_dimensions"
@@ -71,6 +72,7 @@ export type LengthThresholds = {
 export type PostReadinessSettings = {
   validationEnabled?: boolean
   blockOnErrors?: boolean
+  requireCategoryBeforePublishing?: boolean
   enabledRules?: Partial<Record<ReadinessRuleCode, boolean>>
   thresholds?: LengthThresholds
 }
@@ -112,6 +114,11 @@ export const DEFAULT_READINESS_RULES: Record<ReadinessRuleCode, ReadinessRuleCon
     severity: "blocking",
     enabledByDefault: true,
     field: "slug",
+  },
+    category_missing: {
+    severity: "blocking",
+    enabledByDefault: true,
+    field: "category",
   },
   featured_image_conditionally_missing: {
     severity: "blocking",
@@ -230,6 +237,10 @@ export const DEFAULT_READINESS_RULES: Record<ReadinessRuleCode, ReadinessRuleCon
     enabledByDefault: false,
     field: "seo.ogImage.mediaId",
   },
+}
+
+function hasCategory(category?: string | null) {
+  return Boolean(category?.trim())
 }
 
 function isRuleEnabled(code: ReadinessRuleCode, settings?: PostReadinessSettings) {
@@ -368,6 +379,16 @@ export async function evaluatePostReadiness(
     issues.push(createIssue("slug_invalid", "Slug format is invalid."))
   }
 
+  if (
+    settings?.requireCategoryBeforePublishing &&
+    isRuleEnabled("category_missing", settings) &&
+    !hasCategory(post.category)
+  ) {
+    issues.push(
+      createIssue("category_missing", "Category is required before publishing.")
+    )
+  }
+  
   if (isRuleEnabled("content_missing", settings) && !hasContent(post.content)) {
     issues.push(createIssue("content_missing", "Post content is required."))
   }
