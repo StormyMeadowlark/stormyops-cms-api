@@ -1,3 +1,5 @@
+// src/controllers/auth.controller.ts
+
 import { Request, Response } from "express"
 import { z } from "zod"
 import { loginWithPassword, logoutSession, getMeFromSession } from "../services/auth/auth.service"

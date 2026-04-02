@@ -1,3 +1,5 @@
+// src/models/Session.ts
+
 import { Schema, model } from "mongoose"
 
 const SessionSchema = new Schema(

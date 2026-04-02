@@ -1,3 +1,5 @@
+// src/controllers/admin.posts.controller.ts
+
 import { Request, Response, NextFunction } from "express"
 import { adminPatchSchema, createPostSchema } from "../validation/post.validation"
 import { createPost, getAdminPostById, listAdminPosts, updatePost, deletePost, publishPost, unpublishPost, archivePost, unarchivePost, schedulePost } from "../services/posts/posts.service"

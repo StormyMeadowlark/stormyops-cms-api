@@ -1,3 +1,5 @@
+// src/controllers/public.posts.controller.ts
+
 import { Request, Response, NextFunction } from "express"
 import { listPublicPosts, getPublicPostBySlug, listFeaturedPosts } from "../services/posts/posts.service"
 

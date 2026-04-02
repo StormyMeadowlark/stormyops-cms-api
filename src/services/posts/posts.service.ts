@@ -1,3 +1,5 @@
+// src/services/posts/posts.service.ts
+
 import { Types } from "mongoose"
 import { Media } from "../../models/Media"
 import { Post } from "../../models/Post"

@@ -1,3 +1,5 @@
+// src/jobs/publishJobs.ts
+
 import { publishQueue } from "./queues/publish.queue"
 
 export function publishJobId(tenantId: string, postId: string) {

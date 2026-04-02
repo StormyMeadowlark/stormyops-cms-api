@@ -1,3 +1,5 @@
+// src/services/settings/settings-to-readiness.ts
+
 import {
   PostReadinessSettings,
   ReadinessRuleCode,

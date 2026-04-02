@@ -1,3 +1,5 @@
+// src/jobs/connection.ts
+
 import type { ConnectionOptions } from "bullmq"
 
 function getRedisConnection(): ConnectionOptions {

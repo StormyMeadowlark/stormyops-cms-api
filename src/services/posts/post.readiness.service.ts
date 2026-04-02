@@ -1,3 +1,5 @@
+// src/services/posts/post.readiness.service.ts
+
 import { Media } from "../../models/Media"
 import { isValidSlug } from "../../utils/slug"
 

@@ -1,3 +1,5 @@
+// src/routes/v1/admin.routes.ts
+
 import { Router } from "express"
 import { requireAuth } from "../../middleware/requireAuth"
 

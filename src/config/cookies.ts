@@ -1,3 +1,5 @@
+// src/config/cookies.ts
+
 export function getSessionCookieOptions() {
   const isProd = process.env.NODE_ENV === "production"
 

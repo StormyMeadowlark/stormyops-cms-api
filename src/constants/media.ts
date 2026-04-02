@@ -1,3 +1,5 @@
+// src/constants/media.ts
+
 export const IMAGE_MIME_TYPES = [
   "image/jpeg",
   "image/png",

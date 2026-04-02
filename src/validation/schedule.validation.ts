@@ -1,3 +1,5 @@
+// src/validation/schedule.validation.ts
+
 import { z } from "zod"
 
 export const scheduleSchema = z.object({

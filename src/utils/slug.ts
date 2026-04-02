@@ -1,3 +1,5 @@
+// src/utils/slug.ts
+
 export function normalizeSlug(input: string) {
   return input
     .trim()

@@ -1,3 +1,5 @@
+// src/services/auth/auth.service.ts
+
 import { User } from "../../models/User"
 import { Session } from "../../models/Session"
 import { verifyPassword } from "./password"

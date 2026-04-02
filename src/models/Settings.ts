@@ -1,3 +1,5 @@
+// src/models/Settings.ts
+
 import { Schema, model } from "mongoose"
 import { DEFAULT_READINESS_RULES } from "../services/posts/post.readiness.service"
 

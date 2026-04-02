@@ -1,3 +1,5 @@
+// src/controllers/media.controller.ts
+
 import { Request, Response, NextFunction } from "express"
 import {
   createMediaSchema,

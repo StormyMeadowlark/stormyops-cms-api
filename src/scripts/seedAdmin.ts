@@ -1,3 +1,5 @@
+// src/scripts/seedAdmin.ts
+
 import dotenv from "dotenv"
 dotenv.config()
 

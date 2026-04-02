@@ -1,3 +1,5 @@
+// src/models/Media.ts
+
 import { Schema, model, Types } from "mongoose"
 
 export type MediaKind = "image" | "document" | "audio" | "video"

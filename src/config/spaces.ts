@@ -1,3 +1,5 @@
+// src/config/spaces.ts
+
 import { S3Client } from "@aws-sdk/client-s3"
 
 const region = process.env.DO_SPACES_REGION

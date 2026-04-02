@@ -1,3 +1,5 @@
+// src/models/Post.ts
+
 import { Schema, model, Types } from "mongoose"
 
 type PostStatus = "draft" | "scheduled" | "published" | "archived"

@@ -1,3 +1,5 @@
+// src/middleware/requireAuth.ts
+
 import { Request, Response, NextFunction } from "express"
 import { Session } from "../models/Session"
 import { User } from "../models/User"

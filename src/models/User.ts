@@ -1,3 +1,5 @@
+// src/models/User.ts
+
 import { Schema, model } from "mongoose"
 
 export type UserRole = "admin" | "editor"

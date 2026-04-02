@@ -1,3 +1,5 @@
+// src/routes/v1/auth.routes.ts
+
 import { Router } from "express"
 import { login, logout, me } from "../../controllers/auth.controller"
 

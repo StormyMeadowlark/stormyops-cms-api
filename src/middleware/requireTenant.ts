@@ -1,3 +1,5 @@
+// src/middleware/requireTenants.ts
+
 import { Request, Response, NextFunction } from "express"
 
 export function requireTenant(req: Request, res: Response, next: NextFunction) {

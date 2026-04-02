@@ -1,3 +1,5 @@
+// src/jobs/workers/publish.worker.ts
+
 import { Worker } from "bullmq"
 import { bullConnection } from "../connection"
 import { publishPost } from "../../services/posts/posts.service"

@@ -1,3 +1,5 @@
+// src/routes/v1/admin.posts.routes.ts
+
 import { Router } from "express"
 import { requireTenant } from "../../middleware/requireTenant"
 import { requireAuth } from "../../middleware/requireAuth"

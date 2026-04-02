@@ -1,3 +1,5 @@
+// src/routes/v1/admin.media.upload.routes.ts
+
 import { Router } from "express"
 import { requireTenant } from "../../middleware/requireTenant"
 import { requireAuth } from "../../middleware/requireAuth"

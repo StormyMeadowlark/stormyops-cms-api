@@ -1,3 +1,5 @@
+//src/controllers/settings.controller.ts
+
 import { Request, Response, NextFunction } from "express"
 import { getOrCreateSettings, updateSettings, resetSettings } from "../services/settings/settings.service"
 import { updateSettingsSchema } from "../validation/settings.validation"

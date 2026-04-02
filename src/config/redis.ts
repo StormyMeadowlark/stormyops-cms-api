@@ -1,3 +1,5 @@
+// src/config/redis.ts
+
 import Redis from "ioredis"
 
 function createRedisClient() {

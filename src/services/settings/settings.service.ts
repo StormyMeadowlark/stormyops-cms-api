@@ -1,3 +1,5 @@
+// src/services/settings/settings.service.ts
+
 import { Settings } from "../../models/Settings"
 
 function normalizeSettings(doc: any) {

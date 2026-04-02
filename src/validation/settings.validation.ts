@@ -1,3 +1,5 @@
+// src/validation/settings.validation.ts
+
 import { z } from "zod"
 import { ALL_MEDIA_MIME_TYPES } from "../constants/media"
 import { DEFAULT_READINESS_RULES } from "../services/posts/post.readiness.service"

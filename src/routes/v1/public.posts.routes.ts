@@ -1,3 +1,5 @@
+// src/routes/v1/public.posts.routes.ts
+
 import { Router } from "express"
 import { requireTenant } from "../../middleware/requireTenant"
 import { getPublicPosts, getPublicFeaturedPosts, getPublicPost } from "../../controllers/public.posts.controller"

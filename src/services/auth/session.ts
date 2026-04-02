@@ -1,3 +1,5 @@
+// src/services/auth/session.ts
+
 import crypto from "crypto"
 
 export function newSessionId() {
