@@ -551,21 +551,49 @@ export async function publishPost(params: { tenantId: string; userId: string; id
 
   const now = new Date()
 
+  const post = await Post.findOne({
+    _id: oid,
+    tenantId: params.tenantId,
+    $or: [
+      { status: "draft" },
+      { status: "scheduled", scheduledFor: { $ne: null, $lte: now } },
+    ],
+  }).lean()
+
+  if (!post) {
+    throw Object.assign(new Error("Not found or not ready to publish"), { status: 409 })
+  }
+
+  await assertPostCanProceed({
+    tenantId: params.tenantId,
+    post,
+    forAction: "publish",
+  })
+
   const doc = await Post.findOneAndUpdate(
     {
       _id: oid,
       tenantId: params.tenantId,
-      // allow publishing from draft OR scheduled that is due
       $or: [
         { status: "draft" },
         { status: "scheduled", scheduledFor: { $ne: null, $lte: now } },
       ],
     },
-    { $set: { status: "published", publishedAt: now, scheduledFor: null, updatedBy: params.userId } },
+    {
+      $set: {
+        status: "published",
+        publishedAt: now,
+        scheduledFor: null,
+        updatedBy: params.userId,
+      },
+    },
     { new: true }
   ).lean()
 
-  if (!doc) throw Object.assign(new Error("Not found or not ready to publish"), { status: 409 })
+  if (!doc) {
+    throw Object.assign(new Error("Not found or not ready to publish"), { status: 409 })
+  }
+
   return doc
 }
 
@@ -592,13 +620,32 @@ export async function schedulePost(params: {
   const oid = toObjectId(params.id)
   if (!oid) throw Object.assign(new Error("Invalid id"), { status: 400 })
 
-  if (params.scheduledFor.getTime() <= Date.now()) {
-  throw Object.assign(new Error("scheduledFor must be in the future"), { status: 400 })
-  }  
-
   if (!(params.scheduledFor instanceof Date) || isNaN(params.scheduledFor.getTime())) {
     throw Object.assign(new Error("Invalid scheduledFor"), { status: 400 })
   }
+
+  if (params.scheduledFor.getTime() <= Date.now()) {
+    throw Object.assign(new Error("scheduledFor must be in the future"), { status: 400 })
+  }
+
+  const post = await Post.findOne({
+    _id: oid,
+    tenantId: params.tenantId,
+    status: { $in: ["draft", "scheduled"] },
+  }).lean()
+
+  if (!post) {
+    throw Object.assign(
+      new Error("Not found or post cannot be scheduled from its current status"),
+      { status: 409 }
+    )
+  }
+
+  await assertPostCanProceed({
+    tenantId: params.tenantId,
+    post,
+    forAction: "schedule",
+  })
 
   const doc = await Post.findOneAndUpdate(
     {

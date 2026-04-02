@@ -14,6 +14,42 @@ function normalizeSettings(doc: any) {
   return settings
 }
 
+function normalizeMediaField(value: any) {
+  if (!value || typeof value !== "object") return value
+
+  return {
+    url: typeof value.url === "string" && value.url.trim() ? value.url.trim() : null,
+    mediaId: typeof value.mediaId === "string" && value.mediaId.trim() ? value.mediaId.trim() : null,
+  }
+}
+
+function flattenForDotNotation(
+  obj: Record<string, any>,
+  prefix = ""
+): Record<string, any> {
+  const output: Record<string, any> = {}
+
+  for (const [key, value] of Object.entries(obj)) {
+    const path = prefix ? `${prefix}.${key}` : key
+
+    if (value === undefined) continue
+
+    const isPlainObject =
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      !(value instanceof Date)
+
+    if (isPlainObject) {
+      Object.assign(output, flattenForDotNotation(value, path))
+    } else {
+      output[path] = value
+    }
+  }
+
+  return output
+}
+
 export async function getOrCreateSettings(tenantId: string) {
   let doc = await Settings.findOne({ tenantId })
 
@@ -25,9 +61,32 @@ export async function getOrCreateSettings(tenantId: string) {
 }
 
 export async function updateSettings(tenantId: string, patch: any) {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw Object.assign(new Error("Invalid settings patch"), { status: 400 })
+  }
+
+  if (patch.site?.defaultOgImage !== undefined) {
+    patch.site.defaultOgImage = normalizeMediaField(patch.site.defaultOgImage)
+  }
+
+  if (patch.site?.siteLogo !== undefined) {
+    patch.site.siteLogo = normalizeMediaField(patch.site.siteLogo)
+  }
+
+  if (patch.site?.favicon !== undefined) {
+    patch.site.favicon = normalizeMediaField(patch.site.favicon)
+  }
+
+  const flattenedPatch = flattenForDotNotation(patch)
+
   const doc = await Settings.findOneAndUpdate(
     { tenantId },
-    { $set: patch },
+    {
+      $set: {
+        tenantId,
+        ...flattenedPatch,
+      },
+    },
     {
       new: true,
       upsert: true,

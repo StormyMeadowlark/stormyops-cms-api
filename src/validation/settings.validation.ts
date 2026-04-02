@@ -3,15 +3,27 @@ import { ALL_MEDIA_MIME_TYPES } from "../constants/media"
 import { DEFAULT_READINESS_RULES } from "../services/posts/post.readiness.service"
 
 const readinessRuleCodeEnum = z.enum(
-  Object.keys(DEFAULT_READINESS_RULES) as [keyof typeof DEFAULT_READINESS_RULES, ...(keyof typeof DEFAULT_READINESS_RULES)[]]
+  Object.keys(DEFAULT_READINESS_RULES) as [
+    keyof typeof DEFAULT_READINESS_RULES,
+    ...(keyof typeof DEFAULT_READINESS_RULES)[]
+  ]
 )
 
-const thresholdSchema = z.object({
-  under: z.number().int().min(0).max(1000),
-  over: z.number().int().min(1).max(1000),
-}).refine((v) => v.over >= v.under, {
-  message: "over must be greater than or equal to under",
-})
+const thresholdSchema = z
+  .object({
+    under: z.number().int().min(0).max(1000),
+    over: z.number().int().min(1).max(1000),
+  })
+  .refine((v) => v.over >= v.under, {
+    message: "over must be greater than or equal to under",
+  })
+
+const optionalMediaRefSchema = z
+  .object({
+    url: z.string().url().optional().or(z.literal("")),
+    mediaId: z.string().min(1).optional().or(z.literal("")),
+  })
+  .partial()
 
 export const updateSettingsSchema = z.object({
   site: z.object({
@@ -21,11 +33,17 @@ export const updateSettingsSchema = z.object({
     defaultAuthor: z.string().max(120).optional(),
     defaultEmail: z.string().email().optional().or(z.literal("")),
     timezone: z.string().min(1).max(80).optional(),
+
+    defaultOgImage: optionalMediaRefSchema.optional(),
+    siteLogo: optionalMediaRefSchema.optional(),
+    favicon: optionalMediaRefSchema.optional(),
+
     maintenanceMode: z.boolean().optional(),
   }).partial().optional(),
 
   publishing: z.object({
     validationEnabled: z.boolean().optional(),
+    requireCategoryBeforePublishing: z.boolean().optional(),
     blockOnErrors: z.boolean().optional(),
     allowPublishWithWarnings: z.boolean().optional(),
     allowScheduleWithWarnings: z.boolean().optional(),
@@ -45,7 +63,6 @@ export const updateSettingsSchema = z.object({
     allowOnVideo: z.boolean().optional(),
     allowOnAudio: z.boolean().optional(),
     allowOnResource: z.boolean().optional(),
-    requireCategoryBeforePublishing: z.boolean().optional(),
     requireApproval: z.boolean().optional(),
     autoFlagLanguage: z.boolean().optional(),
     autoFlagSpam: z.boolean().optional(),

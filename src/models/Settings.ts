@@ -49,6 +49,7 @@ const SettingsSchema = new Schema(
       blockOnErrors: { type: Boolean, default: false },
       allowPublishWithWarnings: { type: Boolean, default: true },
       allowScheduleWithWarnings: { type: Boolean, default: true },
+      requireCategoryBeforePublishing: { type: Boolean, default: false },
 
       requiredFields: {
         title: { type: Boolean, default: true },
@@ -112,7 +113,7 @@ const SettingsSchema = new Schema(
       allowOnAudio: { type: Boolean, default: true },
       allowOnResource: { type: Boolean, default: true },
 
-      requireCategoryBeforePublishing: { type: Boolean, default: false },
+      
       requireApproval: { type: Boolean, default: true },
       autoFlagLanguage: { type: Boolean, default: true },
       autoFlagSpam: { type: Boolean, default: true },

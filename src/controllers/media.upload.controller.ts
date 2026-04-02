@@ -5,6 +5,7 @@ import crypto from "crypto"
 import { spacesClient } from "../config/spaces"
 import { createMediaUploadSchema } from "../validation/media.upload.validation"
 import { getMediaKindFromMimeType, sanitizeFileName } from "../utils/media"
+import { getOrCreateSettings } from "../services/settings/settings.service"
 
 export async function createAdminMediaUpload(
   req: Request,
@@ -25,6 +26,32 @@ export async function createAdminMediaUpload(
     if (!cdnBaseUrl) throw new Error("DO_SPACES_CDN_BASE_URL is missing")
 
     const body = createMediaUploadSchema.parse(req.body)
+
+    const settings = await getOrCreateSettings(tenantId)
+
+    const allowedMimeTypes =
+      Array.isArray(settings?.media?.allowedMimeTypes) &&
+      settings.media.allowedMimeTypes.length > 0
+        ? settings.media.allowedMimeTypes
+        : null
+
+    if (allowedMimeTypes && !allowedMimeTypes.includes(body.mimeType)) {
+      throw Object.assign(
+        new Error(`Uploads of type "${body.mimeType}" are not allowed by settings`),
+        { status: 409 }
+      )
+    }
+
+    const maxUploadSizeMb = settings?.media?.maxUploadSizeMb ?? 100
+    const maxUploadSizeBytes = maxUploadSizeMb * 1024 * 1024
+
+    if (body.size > maxUploadSizeBytes) {
+      throw Object.assign(
+        new Error(`File exceeds tenant upload limit of ${maxUploadSizeMb} MB`),
+        { status: 409 }
+      )
+    }
+
     const kind = getMediaKindFromMimeType(body.mimeType)
 
     const ext = body.fileName.includes(".")
@@ -40,7 +67,7 @@ export async function createAdminMediaUpload(
       Bucket: bucket,
       Key: storageKey,
       ContentType: body.mimeType,
-      ACL: "public-read"
+      ACL: "public-read",
     })
 
     const uploadUrl = await getSignedUrl(spacesClient, command, {
