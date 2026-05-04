@@ -81,6 +81,7 @@ export type ReadinessPost = {
   title?: string | null
   slug?: string | null
   excerpt?: string | null
+  postType?: "blog" | "video" | "audio" | "resource" | "page" | null
   content?: any[] | null
   category?: string | null
   coverImageUrl?: string | null
@@ -279,7 +280,7 @@ function getEffectiveOgImageUrl(post: ReadinessPost) {
 }
 
 function requiresFeaturedImage(post: ReadinessPost) {
-  return post.category === "blog"
+  return (post.postType ?? "blog") === "blog"
 }
 
 function splitIssuesBySeverity(issues: ReadinessIssue[]) {

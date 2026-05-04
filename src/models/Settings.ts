@@ -114,7 +114,7 @@ const SettingsSchema = new Schema(
       allowOnVideo: { type: Boolean, default: true },
       allowOnAudio: { type: Boolean, default: true },
       allowOnResource: { type: Boolean, default: true },
-
+      allowOnPage: { type: Boolean, default: false },
       
       requireApproval: { type: Boolean, default: true },
       autoFlagLanguage: { type: Boolean, default: true },
@@ -144,6 +144,7 @@ const SettingsSchema = new Schema(
       enableAudioPosts: { type: Boolean, default: true },
       enableResources: { type: Boolean, default: true },
       enableCategories: { type: Boolean, default: true },
+      enablePages: { type: Boolean, default: true },
       allowCategoryManagement: { type: Boolean, default: true },
       enableTags: { type: Boolean, default: true },
       maxTags: { type: Number, default: 5 },

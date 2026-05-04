@@ -2,8 +2,6 @@
 
 import { Schema, model, Types } from "mongoose"
 
-type PostStatus = "draft" | "scheduled" | "published" | "archived"
-
 const ContentBlockSchema = new Schema(
   {
     type: { type: String, required: true },
@@ -51,6 +49,13 @@ const PostSchema = new Schema(
     excerpt: {
       type: String,
       trim: true,
+    },
+
+    postType: {
+      type: String,
+      enum: ["blog", "video", "audio", "resource", "page"],
+      default: "blog",
+      index: true,
     },
 
     content: {
@@ -132,5 +137,11 @@ PostSchema.index({ tenantId: 1, isFeatured: 1, status: 1, publishedAt: -1 })
  * Fast featured listing (homepage)
  */
 PostSchema.index({ tenantId: 1, isFeatured: 1, featuredRank: 1 })
+
+/**
+ * Helpful compound index for Posts
+ */
+
+PostSchema.index({ tenantId: 1, postType: 1, status: 1, publishedAt: -1 })
 
 export const Post = model("Post", PostSchema)

@@ -10,7 +10,8 @@ import { evaluatePostReadiness } from "./post.readiness.service"
 import {
   resolvePostDefaultsFromSettings,
   validatePostPolicy,
-  isPostCategoryEnabled,
+  isPostTypeEnabled,
+  getEnabledPostTypes,
 } from "../settings/settings-policy.service"
 
 function isDuplicateKeyError(err: any) {
@@ -306,9 +307,20 @@ async function assertPostCanProceed(params: {
   post: any
   forAction: "publish" | "schedule"
 }) {
+  const settings = await getOrCreateSettings(params.tenantId)
+
+  validatePostPolicy({
+    settings,
+    data: {
+      category: params.post.category,
+      tags: params.post.tags,
+      commentsEnabled: params.post.commentsEnabled,
+    },
+    action: params.forAction,
+  })
+
   if (!params.post.requireValidationToPublish) return
 
-  const settings = await getOrCreateSettings(params.tenantId)
   const readinessSettings = mapSettingsToReadiness(settings)
   const readiness = await evaluatePostReadiness(params.post, readinessSettings)
 
@@ -329,7 +341,10 @@ async function assertPostCanProceed(params: {
   ) {
     throw Object.assign(
       new Error("Post cannot publish because warnings are not allowed by settings"),
-      { status: 409, details: readiness }
+      {
+        status: 409,
+        details: readiness,
+      }
     )
   }
 
@@ -340,7 +355,10 @@ async function assertPostCanProceed(params: {
   ) {
     throw Object.assign(
       new Error("Post cannot schedule because warnings are not allowed by settings"),
-      { status: 409, details: readiness }
+      {
+        status: 409,
+        details: readiness,
+      }
     )
   }
 }
@@ -351,9 +369,7 @@ export async function createPost(params: { tenantId: string; userId: string; dat
     throw Object.assign(new Error("Invalid slug"), { status: 400 })
   }
 
-  
-
-    const settings = await getOrCreateSettings(params.tenantId)
+  const settings = await getOrCreateSettings(params.tenantId)
 
   const postDefaults = resolvePostDefaultsFromSettings({
     settings,
@@ -364,11 +380,14 @@ export async function createPost(params: { tenantId: string; userId: string; dat
     settings,
     data: {
       ...params.data,
+      postType: postDefaults.postType,
       category: postDefaults.category,
+      tags: postDefaults.tags,
       commentsEnabled: postDefaults.commentsEnabled,
     },
     action: "create",
   })
+
 
   const status = params.data.status || "draft"
   const now = new Date()
@@ -400,7 +419,8 @@ export async function createPost(params: { tenantId: string; userId: string; dat
       slug,
       excerpt: params.data.excerpt,
       content: params.data.content || [],
-      tags: params.data.tags || [],
+      postType: postDefaults.postType,
+      tags: postDefaults.tags,
       category: postDefaults.category,
       commentsEnabled: postDefaults.commentsEnabled,
       requireValidationToPublish: params.data.requireValidationToPublish ?? true,
@@ -475,20 +495,25 @@ export async function getAdminPostById(params: { tenantId: string; id: string })
   return doc
 }
 
-export async function updatePost(params: { tenantId: string; userId: string; id: string; data: any }) {
+export async function updatePost(params: {
+  tenantId: string
+  userId: string
+  id: string
+  data: any
+}) {
   const oid = toObjectId(params.id)
   if (!oid) throw Object.assign(new Error("Invalid id"), { status: 400 })
 
-    const currentPost = await Post.findOne({
-  _id: oid,
-  tenantId: params.tenantId,
-})
-  .select("category tags commentsEnabled")
-  .lean()
+  const currentPost = await Post.findOne({
+    _id: oid,
+    tenantId: params.tenantId,
+  })
+    .select("postType category tags commentsEnabled")
+    .lean()
 
-if (!currentPost) {
-  throw Object.assign(new Error("Not found"), { status: 404 })
-}
+  if (!currentPost) {
+    throw Object.assign(new Error("Not found"), { status: 404 })
+  }
 
   const update: any = { ...params.data, updatedBy: params.userId }
 
@@ -508,26 +533,6 @@ if (!currentPost) {
     update.category = update.category.trim().toLowerCase()
     if (!update.category) update.category = "blog"
   }
-  const settings = await getOrCreateSettings(params.tenantId)
-
-validatePostPolicy({
-  settings,
-  data: {
-    category:
-      update.category !== undefined
-        ? update.category
-        : currentPost.category,
-    tags:
-      update.tags !== undefined
-        ? update.tags
-        : currentPost.tags,
-    commentsEnabled:
-      update.commentsEnabled !== undefined
-        ? update.commentsEnabled
-        : currentPost.commentsEnabled,
-  },
-  action: "update",
-})
 
   if (typeof update.coverImageUrl === "string") {
     update.coverImageUrl = update.coverImageUrl.trim()
@@ -546,7 +551,82 @@ validatePostPolicy({
   if (typeof update.featuredExpiresAt === "string") {
     update.featuredExpiresAt = new Date(update.featuredExpiresAt)
   }
-  if (update.featuredExpiresAt === undefined) delete update.featuredExpiresAt
+
+  if (update.featuredExpiresAt === undefined) {
+    delete update.featuredExpiresAt
+  }
+
+  if (typeof update.postType === "string") {
+    update.postType = update.postType.trim().toLowerCase()
+  }
+
+  const settings = await getOrCreateSettings(params.tenantId)
+
+const policyData = {
+  postType:
+    update.postType !== undefined
+      ? update.postType
+      : currentPost.postType,
+  category:
+    update.category !== undefined
+      ? update.category
+      : currentPost.category,
+  tags:
+    update.tags !== undefined
+      ? update.tags
+      : currentPost.tags,
+  commentsEnabled:
+    update.commentsEnabled !== undefined
+      ? update.commentsEnabled
+      : currentPost.commentsEnabled,
+}
+
+const postDefaults = resolvePostDefaultsFromSettings({
+  settings,
+  data: policyData,
+})
+
+validatePostPolicy({
+  settings,
+  data: {
+    ...policyData,
+    postType: postDefaults.postType,
+    category: postDefaults.category,
+    tags: postDefaults.tags,
+  },
+  action: "update",
+})
+
+if (update.postType !== undefined) {
+  update.postType = postDefaults.postType
+}
+
+if (update.category !== undefined) {
+  update.category = postDefaults.category
+}
+
+if (update.tags !== undefined) {
+  update.tags = postDefaults.tags
+}
+
+  validatePostPolicy({
+    settings,
+    data: {
+      category:
+        update.category !== undefined
+          ? update.category
+          : currentPost.category,
+      tags:
+        update.tags !== undefined
+          ? update.tags
+          : currentPost.tags,
+      commentsEnabled:
+        update.commentsEnabled !== undefined
+          ? update.commentsEnabled
+          : currentPost.commentsEnabled,
+    },
+    action: "update",
+  })
 
   if (update.content !== undefined) {
     await validatePostMediaReferences({
@@ -582,7 +662,9 @@ validatePostPolicy({
     return doc
   } catch (err: any) {
     if (isDuplicateKeyError(err)) {
-      throw Object.assign(new Error("Slug already exists for this tenant"), { status: 409 })
+      throw Object.assign(new Error("Slug already exists for this tenant"), {
+        status: 409,
+      })
     }
     throw err
   }
@@ -617,11 +699,67 @@ export async function publishPost(params: { tenantId: string; userId: string; id
     throw Object.assign(new Error("Not found or not ready to publish"), { status: 409 })
   }
 
-  await assertPostCanProceed({
-    tenantId: params.tenantId,
-    post,
-    forAction: "publish",
+async function assertPostCanProceed(params: {
+  tenantId: string
+  post: any
+  forAction: "publish" | "schedule"
+}) {
+  const settings = await getOrCreateSettings(params.tenantId)
+
+  validatePostPolicy({
+    settings,
+    data: {
+      postType: params.post.postType,
+      category: params.post.category,
+      tags: params.post.tags,
+      commentsEnabled: params.post.commentsEnabled,
+    },
+    action: params.forAction,
   })
+
+  if (!params.post.requireValidationToPublish) return
+
+  const readinessSettings = mapSettingsToReadiness(settings)
+  const readiness = await evaluatePostReadiness(params.post, readinessSettings)
+
+  if (!readiness.isPublishable) {
+    throw Object.assign(
+      new Error(`Post cannot ${params.forAction} because validation failed`),
+      {
+        status: 409,
+        details: readiness,
+      }
+    )
+  }
+
+  if (
+    params.forAction === "publish" &&
+    !settings.publishing.allowPublishWithWarnings &&
+    readiness.warnings.length > 0
+  ) {
+    throw Object.assign(
+      new Error("Post cannot publish because warnings are not allowed by settings"),
+      {
+        status: 409,
+        details: readiness,
+      }
+    )
+  }
+
+  if (
+    params.forAction === "schedule" &&
+    !settings.publishing.allowScheduleWithWarnings &&
+    readiness.warnings.length > 0
+  ) {
+    throw Object.assign(
+      new Error("Post cannot schedule because warnings are not allowed by settings"),
+      {
+        status: 409,
+        details: readiness,
+      }
+    )
+  }
+}
 
   const doc = await Post.findOneAndUpdate(
     {
@@ -778,8 +916,19 @@ export async function listPublicPosts(params: {
   const page = Math.max(Number(params.page || 1), 1)
   const skip = (page - 1) * limit
 
+  const settings = await getOrCreateSettings(params.tenantId)
+
+  if (!isPostTypeEnabled(settings, "blog")) {
+    return {
+      items: [],
+      total: 0,
+      page,
+      limit,
+    }
+  }
   const filter: any = {
     tenantId: params.tenantId,
+    postType: "blog",
     status: "published",
     publishedAt: { $ne: null, $lte: new Date() },
   }
@@ -806,11 +955,21 @@ export async function getPublicPostBySlug(params: { tenantId: string; slug: stri
   const doc = await Post.findOne({
     tenantId: params.tenantId,
     slug,
+    postType: "blog",
     status: "published",
     publishedAt: { $ne: null, $lte: new Date() },
   }).lean()
 
   if (!doc) throw Object.assign(new Error("Not found"), { status: 404 })
+
+  const settings = await getOrCreateSettings(params.tenantId)
+
+  const postType = doc.postType ?? "blog"
+
+  if (!isPostTypeEnabled(settings, postType)) {
+    throw Object.assign(new Error("Not found"), { status: 404 })
+  }
+
   return doc
 }
 

@@ -287,6 +287,7 @@ export async function getAdminPostReadiness(
       title: post.title,
       slug: post.slug,
       excerpt: post.excerpt,
+      postType: post.postType ?? "blog",
       content: Array.isArray(post.content) ? post.content : [],
       category: post.category,
       coverImageUrl: post.coverImageUrl ?? null,

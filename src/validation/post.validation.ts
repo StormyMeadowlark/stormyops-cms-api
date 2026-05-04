@@ -7,7 +7,7 @@ import {
   AUDIO_MIME_TYPES,
   VIDEO_MIME_TYPES,
 } from "../constants/media"
-
+const postTypeEnum = z.enum(["blog", "video", "audio", "resource", "page"])
 const imageMimeEnum = z.enum(IMAGE_MIME_TYPES)
 const documentMimeEnum = z.enum(DOCUMENT_MIME_TYPES)
 const audioMimeEnum = z.enum(AUDIO_MIME_TYPES)
@@ -191,6 +191,7 @@ const basePostSchema = z.object({
   content: z.array(contentBlockSchema).optional(),
   tags: z.array(z.string().max(50)).optional(),
   category: z.string().min(1).max(50).optional(),
+  postType: postTypeEnum.optional(),
   commentsEnabled: z.boolean().optional(),
   requireValidationToPublish: z.boolean().optional(),
   coverImageMediaId: z.string().min(1).optional(),
