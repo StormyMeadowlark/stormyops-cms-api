@@ -1,7 +1,6 @@
-// worker.ts
+// src/worker.ts
 
-import dotenv from "dotenv"
-dotenv.config()
+import "./config/env"
 
 import { connectDb } from "./config/db"
 import "./jobs/workers/publish.worker"

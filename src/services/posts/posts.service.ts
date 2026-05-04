@@ -7,7 +7,11 @@ import { normalizeSlug, isValidSlug } from "../../utils/slug"
 import { getOrCreateSettings } from "../settings/settings.service"
 import { mapSettingsToReadiness } from "../settings/settings-to-readiness"
 import { evaluatePostReadiness } from "./post.readiness.service"
-
+import {
+  resolvePostDefaultsFromSettings,
+  validatePostPolicy,
+  isPostCategoryEnabled,
+} from "../settings/settings-policy.service"
 
 function isDuplicateKeyError(err: any) {
   return err && (err.code === 11000 || err.codeName === "DuplicateKey")
@@ -347,6 +351,25 @@ export async function createPost(params: { tenantId: string; userId: string; dat
     throw Object.assign(new Error("Invalid slug"), { status: 400 })
   }
 
+  
+
+    const settings = await getOrCreateSettings(params.tenantId)
+
+  const postDefaults = resolvePostDefaultsFromSettings({
+    settings,
+    data: params.data,
+  })
+
+  validatePostPolicy({
+    settings,
+    data: {
+      ...params.data,
+      category: postDefaults.category,
+      commentsEnabled: postDefaults.commentsEnabled,
+    },
+    action: "create",
+  })
+
   const status = params.data.status || "draft"
   const now = new Date()
   const publishedAt = status === "published" ? now : null
@@ -378,11 +401,8 @@ export async function createPost(params: { tenantId: string; userId: string; dat
       excerpt: params.data.excerpt,
       content: params.data.content || [],
       tags: params.data.tags || [],
-      category:
-        typeof params.data.category === "string" && params.data.category.trim()
-          ? params.data.category.trim().toLowerCase()
-          : "blog",
-      commentsEnabled: params.data.commentsEnabled ?? true,
+      category: postDefaults.category,
+      commentsEnabled: postDefaults.commentsEnabled,
       requireValidationToPublish: params.data.requireValidationToPublish ?? true,
       coverImageUrl: params.data.coverImageUrl?.trim() ? params.data.coverImageUrl.trim() : null,
       coverImageMediaId: params.data.coverImageMediaId?.trim()
@@ -459,6 +479,17 @@ export async function updatePost(params: { tenantId: string; userId: string; id:
   const oid = toObjectId(params.id)
   if (!oid) throw Object.assign(new Error("Invalid id"), { status: 400 })
 
+    const currentPost = await Post.findOne({
+  _id: oid,
+  tenantId: params.tenantId,
+})
+  .select("category tags commentsEnabled")
+  .lean()
+
+if (!currentPost) {
+  throw Object.assign(new Error("Not found"), { status: 404 })
+}
+
   const update: any = { ...params.data, updatedBy: params.userId }
 
   delete update.status
@@ -477,6 +508,26 @@ export async function updatePost(params: { tenantId: string; userId: string; id:
     update.category = update.category.trim().toLowerCase()
     if (!update.category) update.category = "blog"
   }
+  const settings = await getOrCreateSettings(params.tenantId)
+
+validatePostPolicy({
+  settings,
+  data: {
+    category:
+      update.category !== undefined
+        ? update.category
+        : currentPost.category,
+    tags:
+      update.tags !== undefined
+        ? update.tags
+        : currentPost.tags,
+    commentsEnabled:
+      update.commentsEnabled !== undefined
+        ? update.commentsEnabled
+        : currentPost.commentsEnabled,
+  },
+  action: "update",
+})
 
   if (typeof update.coverImageUrl === "string") {
     update.coverImageUrl = update.coverImageUrl.trim()

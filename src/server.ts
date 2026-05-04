@@ -1,7 +1,6 @@
-// server.ts
+// src/server.ts
 
-import dotenv from "dotenv"
-dotenv.config()
+import "./config/env"
 
 import { createApp } from "./app"
 import { connectDb } from "./config/db"

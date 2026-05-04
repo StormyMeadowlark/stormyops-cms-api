@@ -5,6 +5,12 @@ import { adminPatchSchema, createPostSchema } from "../validation/post.validatio
 import { createPost, getAdminPostById, listAdminPosts, updatePost, deletePost, publishPost, unpublishPost, archivePost, unarchivePost, schedulePost } from "../services/posts/posts.service"
 import { scheduleSchema } from "../validation/schedule.validation"
 import { enqueuePublishJob, removePublishJob } from "../jobs/publishJobs"
+import { getOrCreateSettings } from "../services/settings/settings.service"
+import { mapSettingsToReadiness } from "../services/settings/settings-to-readiness"
+import {
+  evaluatePostReadiness,
+  type ReadinessPost,
+} from "../services/posts/post.readiness.service"
 
 // POST /api/v1/posts
 export async function createAdminPost(req: Request, res: Response, next: NextFunction) {
@@ -262,18 +268,52 @@ export async function scheduleAdminPost(req: Request, res: Response, next: NextF
   }
 }
 
-export async function getAdminPostReadiness(req: Request, res: Response, next: NextFunction) {
+export async function getAdminPostReadiness(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const tenantId = (req as any).tenantId as string | undefined
     if (!tenantId) return res.status(400).json({ message: "Tenant missing" })
 
-    const id = req.params.id
+    const idParam = req.params.id
+    const id = Array.isArray(idParam) ? idParam[0] : idParam
     if (!id) return res.status(400).json({ message: "Id required" })
 
     const post = await getAdminPostById({ tenantId, id })
+
+    const readinessPost: ReadinessPost = {
+      title: post.title,
+      slug: post.slug,
+      excerpt: post.excerpt,
+      content: Array.isArray(post.content) ? post.content : [],
+      category: post.category,
+      coverImageUrl: post.coverImageUrl ?? null,
+      coverImageMediaId: post.coverImageMediaId
+        ? post.coverImageMediaId.toString()
+        : null,
+      seo: {
+        metaTitle: post.seo?.metaTitle ?? null,
+        metaDescription: post.seo?.metaDescription ?? null,
+        ogTitle: post.seo?.ogTitle ?? null,
+        ogDescription: post.seo?.ogDescription ?? null,
+        ogImage: post.seo?.ogImage
+          ? {
+              url: post.seo.ogImage.url ?? null,
+              mediaId: post.seo.ogImage.mediaId
+                ? post.seo.ogImage.mediaId.toString()
+                : null,
+            }
+          : null,
+        canonicalUrl: post.seo?.canonicalUrl ?? null,
+        noindex: post.seo?.noindex ?? null,
+      },
+    }
+
     const settings = await getOrCreateSettings(tenantId)
     const readinessSettings = mapSettingsToReadiness(settings)
-    const result = await evaluatePostReadiness(post, readinessSettings)
+    const result = await evaluatePostReadiness(readinessPost, readinessSettings)
 
     return res.json(result)
   } catch (err) {

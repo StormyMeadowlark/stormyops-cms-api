@@ -1,7 +1,6 @@
 // src/scripts/seedAdmin.ts
 
-import dotenv from "dotenv"
-dotenv.config()
+import "../config/env"
 
 import bcrypt from "bcryptjs"
 import { connectDb } from "../config/db"

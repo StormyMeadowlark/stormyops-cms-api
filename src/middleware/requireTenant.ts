@@ -1,4 +1,4 @@
-// src/middleware/requireTenants.ts
+// src/middleware/requireTenant.ts
 
 import { Request, Response, NextFunction } from "express"
 

@@ -21,9 +21,7 @@ export function extractStorageKeyFromUrl(url: string) {
   }
 }
 
-export async function 
-
-objectExistsInSpaces(storageKey: string) {
+export async function objectExistsInSpaces(storageKey: string) {
   const bucket = getBucket()
 
   try {

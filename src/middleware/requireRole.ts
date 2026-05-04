@@ -1,4 +1,4 @@
-// src/middlware/requireRole.ts
+// src/middleware/requireRole.ts
 
 import { Request, Response, NextFunction } from "express"
 
