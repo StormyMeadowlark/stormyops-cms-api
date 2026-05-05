@@ -24,6 +24,9 @@ export const createMediaSchema = z.object({
   fileName: z.string().min(1).max(255),
   originalFileName: z.string().min(1).max(255).optional(),
   displayName: z.string().min(1).max(255).optional(),
+  tags: z.array(z.string().min(1).max(50)).max(25).optional(),
+  description: z.string().max(500).optional(),
+  thumbnailUrl: z.string().url().optional(),
   mimeType: allMimeEnum,
   extension: z.string().min(1).max(20).optional(),
   size: z.number().int().nonnegative().optional(),
@@ -68,6 +71,9 @@ export const createMediaSchema = z.object({
 
 export const updateMediaSchema = z.object({
   displayName: z.string().min(1).max(255).optional(),
+  description: z.string().max(500).nullable().optional(),
+  tags: z.array(z.string().min(1).max(50)).max(25).optional(),
+  thumbnailUrl: z.string().url().nullable().optional(),
   defaultAlt: z.string().max(160).nullable().optional(),
   defaultCaption: z.string().max(300).nullable().optional(),
 })
@@ -76,6 +82,7 @@ export const listMediaQuerySchema = z.object({
   kind: z.enum(["image", "document", "audio", "video"]).optional(),
   status: z.enum(["pending", "ready", "failed", "deleted"]).optional(),
   q: z.string().max(255).optional(),
+  tag: z.string().min(1).max(50).optional(),
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 })

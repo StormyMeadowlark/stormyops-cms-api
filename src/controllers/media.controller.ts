@@ -49,6 +49,7 @@ export async function listAdminMedia(req: Request, res: Response, next: NextFunc
       kind: parsed.kind,
       status: parsed.status,
       q: parsed.q,
+      tag: parsed.tag,
       page: parsed.page,
       limit: parsed.limit,
     })
@@ -80,6 +81,9 @@ export async function patchAdminMedia(req: Request, res: Response, next: NextFun
     const tenantId = (req as any).tenantId as string | undefined
     if (!tenantId) return res.status(400).json({ message: "Tenant missing" })
 
+    const user = (req as any).user as { id: string } | undefined
+    if (!user?.id) return res.status(401).json({ message: "Not authenticated" })
+
     const idParam = req.params.id
     const id = Array.isArray(idParam) ? idParam[0] : idParam
     if (!id) return res.status(400).json({ message: "Id required" })
@@ -88,6 +92,7 @@ export async function patchAdminMedia(req: Request, res: Response, next: NextFun
 
     const doc = await updateMedia({
       tenantId,
+      userId: user.id,
       id,
       data,
     })

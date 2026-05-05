@@ -18,6 +18,18 @@ function toObjectId(id: string) {
   return new Types.ObjectId(id)
 }
 
+function normalizeTags(tags?: string[]) {
+  if (!Array.isArray(tags)) return []
+
+  return [
+    ...new Set(
+      tags
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ]
+}
+
 export async function createMedia(params: {
   tenantId: string
   userId: string
@@ -31,6 +43,7 @@ export async function createMedia(params: {
       fileName: params.data.fileName,
       originalFileName: params.data.originalFileName ?? null,
       displayName: params.data.displayName ?? null,
+      tags: normalizeTags(params.data.tags),
       mimeType: params.data.mimeType,
       extension: params.data.extension ?? null,
       size: params.data.size ?? 0,
@@ -43,6 +56,10 @@ export async function createMedia(params: {
       defaultAlt: params.data.defaultAlt ?? null,
       defaultCaption: params.data.defaultCaption ?? null,
       uploadedBy: params.userId,
+      description: params.data.description ?? null,
+      thumbnailUrl: params.data.thumbnailUrl ?? null,
+      lastEditedBy: params.userId,
+      processingError: null,
     })
 
     return doc
@@ -59,6 +76,7 @@ export async function listMedia(params: {
   kind?: string
   status?: string
   q?: string
+  tag?: string
   page?: number
   limit?: number
 }) {
@@ -77,12 +95,17 @@ export async function listMedia(params: {
     filter.status = { $ne: "deleted" }
   }
 
+  if (params.tag) {
+    filter.tags = params.tag.trim().toLowerCase()
+  }
+
   if (params.q) {
     const re = new RegExp(params.q, "i")
     filter.$or = [
       { fileName: re },
       { originalFileName: re },
       { displayName: re },
+      { tags: re },
       { mimeType: re },
       { defaultAlt: re },
       { defaultCaption: re },
@@ -111,7 +134,10 @@ export async function getMediaById(params: {
   const doc = await Media.findOne({
     _id: oid,
     tenantId: params.tenantId,
-  }).lean()
+  })
+    .populate("uploadedBy", "email role")
+    .populate("lastEditedBy", "email role")
+    .lean()
 
   if (!doc || doc.status === "deleted") {
     throw Object.assign(new Error("Not found"), { status: 404 })
@@ -122,9 +148,13 @@ export async function getMediaById(params: {
 
 export async function updateMedia(params: {
   tenantId: string
+  userId: string
   id: string
   data: {
     displayName?: string
+    description?: string | null
+    tags?: string[]
+    thumbnailUrl?: string | null
     defaultAlt?: string | null
     defaultCaption?: string | null
   }
@@ -138,6 +168,10 @@ export async function updateMedia(params: {
     update.displayName = params.data.displayName
   }
 
+  if (params.data.tags !== undefined) {
+    update.tags = normalizeTags(params.data.tags)
+  }
+
   if (params.data.defaultAlt !== undefined) {
     update.defaultAlt = params.data.defaultAlt
   }
@@ -145,6 +179,16 @@ export async function updateMedia(params: {
   if (params.data.defaultCaption !== undefined) {
     update.defaultCaption = params.data.defaultCaption
   }
+
+  if (params.data.description !== undefined) {
+  update.description = params.data.description
+  }
+
+  if (params.data.thumbnailUrl !== undefined) {
+    update.thumbnailUrl = params.data.thumbnailUrl
+  }
+
+  update.lastEditedBy = params.userId
 
   const doc = await Media.findOneAndUpdate(
     {

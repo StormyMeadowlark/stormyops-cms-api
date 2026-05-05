@@ -45,6 +45,24 @@ const MediaSchema = new Schema(
       default: null,
     },
 
+    tags: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+
+    description: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
+    thumbnailUrl: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
     mimeType: {
       type: String,
       required: true,
@@ -96,11 +114,23 @@ const MediaSchema = new Schema(
       default: null,
     },
 
+    processingError: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
     uploadedBy: {
       type: Types.ObjectId,
       ref: "User",
       required: true,
       index: true,
+    },
+
+    lastEditedBy: {
+      type: Types.ObjectId,
+      ref: "User",
+      default: null,
     },
 
     deletedAt: { 
@@ -120,5 +150,7 @@ const MediaSchema = new Schema(
 MediaSchema.index({ tenantId: 1, kind: 1, createdAt: -1 })
 MediaSchema.index({ tenantId: 1, status: 1, createdAt: -1 })
 MediaSchema.index({ tenantId: 1, storageKey: 1 }, { unique: true })
+MediaSchema.index({ tenantId: 1, tags: 1 })
+
 
 export const Media = model("Media", MediaSchema)
