@@ -269,8 +269,32 @@ function validateCommentPolicy(params: {
   }
 }
 
+function validateCategoryRequirementBeforePublish(params: {
+  settings: any
+  data: PostPolicyData
+  action: PostPolicyAction
+}) {
+  const requireCategory =
+    params.settings?.publishing?.requireCategoryBeforePublishing ?? false
+
+  const isPublishAction =
+    params.action === "publish" || params.action === "schedule"
+
+  if (!requireCategory || !isPublishAction) return
+
+  const category = params.data.category?.trim()
+
+  if (!category) {
+    throw createPolicyError("Category is required before publishing.", {
+      action: params.action,
+      field: "category",
+    })
+  }
+}
+
 export function validatePostPolicy(params: ValidatePostPolicyParams) {
   validateContentTypePolicy(params)
+  validateCategoryRequirementBeforePublish(params)
   validateCategoryPolicy(params)
   validateTagPolicy(params)
   validateCommentPolicy(params)

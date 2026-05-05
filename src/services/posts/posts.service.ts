@@ -13,6 +13,7 @@ import {
   isPostTypeEnabled,
   getEnabledPostTypes,
 } from "../settings/settings-policy.service"
+import { resolveSeoFromSettings } from "../settings/seo-policy.service"
 
 function isDuplicateKeyError(err: any) {
   return err && (err.code === 11000 || err.codeName === "DuplicateKey")
@@ -360,6 +361,34 @@ async function assertPostCanProceed(params: {
         details: readiness,
       }
     )
+  }
+}
+
+function toSeoPost(doc: any) {
+  return {
+    title: doc.title ?? null,
+    slug: doc.slug ?? null,
+    excerpt: doc.excerpt ?? null,
+    postType: doc.postType ?? "blog",
+    coverImageUrl: doc.coverImageUrl ?? null,
+    publishedAt: doc.publishedAt ?? null,
+    updatedAt: doc.updatedAt ?? null,
+    seo: {
+      metaTitle: doc.seo?.metaTitle ?? null,
+      metaDescription: doc.seo?.metaDescription ?? null,
+      ogTitle: doc.seo?.ogTitle ?? null,
+      ogDescription: doc.seo?.ogDescription ?? null,
+      canonicalUrl: doc.seo?.canonicalUrl ?? null,
+      noindex: doc.seo?.noindex ?? null,
+      ogImage: doc.seo?.ogImage
+        ? {
+            url: doc.seo.ogImage.url ?? null,
+            mediaId: doc.seo.ogImage.mediaId
+              ? doc.seo.ogImage.mediaId.toString()
+              : null,
+          }
+        : null,
+    },
   }
 }
 
@@ -926,6 +955,7 @@ export async function listPublicPosts(params: {
       limit,
     }
   }
+
   const filter: any = {
     tenantId: params.tenantId,
     postType: "blog",
@@ -940,12 +970,27 @@ export async function listPublicPosts(params: {
       .sort({ publishedAt: -1 })
       .skip(skip)
       .limit(limit)
-      .select("title slug excerpt tags coverImageUrl publishedAt seo isFeatured featuredRank")
+      .select(
+        "title slug postType excerpt tags coverImageUrl publishedAt updatedAt seo isFeatured featuredRank"
+      )
       .lean(),
     Post.countDocuments(filter),
   ])
 
-  return { items, total, page, limit }
+  const itemsWithSeo = items.map((item) => ({
+    ...item,
+    resolvedSeo: resolveSeoFromSettings({
+      settings,
+      post: toSeoPost(item),
+    }),
+  }))
+
+  return {
+    items: itemsWithSeo,
+    total,
+    page,
+    limit,
+  }
 }
 
 export async function getPublicPostBySlug(params: { tenantId: string; slug: string }) {
@@ -966,11 +1011,24 @@ export async function getPublicPostBySlug(params: { tenantId: string; slug: stri
 
   const postType = doc.postType ?? "blog"
 
-  if (!isPostTypeEnabled(settings, postType)) {
-    throw Object.assign(new Error("Not found"), { status: 404 })
-  }
+if (!isPostTypeEnabled(settings, postType)) {
+  throw Object.assign(new Error("Not found"), { status: 404 })
+}
 
-  return doc
+const resolvedSeo = resolveSeoFromSettings({
+  settings,
+  post: toSeoPost(doc),
+})
+
+return {
+  ...doc,
+  resolvedSeo,
+}
+
+return {
+  ...doc,
+  resolvedSeo,
+}
 }
 
 export async function listFeaturedPosts(params: { tenantId: string; limit?: number }) {
