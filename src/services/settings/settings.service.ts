@@ -16,6 +16,7 @@ function normalizeSettings(doc: any) {
   return settings
 }
 
+
 function normalizeMediaField(value: any) {
   if (!value || typeof value !== "object") return value
 

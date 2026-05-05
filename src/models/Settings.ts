@@ -154,6 +154,12 @@ const SettingsSchema = new Schema(
       },
     },
 
+    /**
+     * AI/media processing flags are MVP placeholders for now.
+     * They control whether future processing jobs should run,
+     * but they do not currently trigger processing by themselves.
+    */
+
     media: {
       allowedMimeTypes: {
         type: [String],

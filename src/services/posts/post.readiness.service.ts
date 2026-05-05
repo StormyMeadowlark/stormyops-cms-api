@@ -2,6 +2,7 @@
 
 import { Media } from "../../models/Media"
 import { isValidSlug } from "../../utils/slug"
+import { RECOMMENDED_OG_IMAGE_DIMENSIONS } from "../../config/validation-thresholds"
 
 export type ReadinessSeverity = "blocking" | "error" | "warning"
 
@@ -309,7 +310,10 @@ async function getOgImageMedia(post: ReadinessPost) {
 }
 
 function hasRecommendedOgDimensions(width?: number | null, height?: number | null) {
-  return width === 1200 && height === 630
+  return (
+    width === RECOMMENDED_OG_IMAGE_DIMENSIONS.width &&
+    height === RECOMMENDED_OG_IMAGE_DIMENSIONS.height
+  )
 }
 
 function getThreshold(

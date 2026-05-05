@@ -8,6 +8,7 @@ import {
   VIDEO_MIME_TYPES,
   ALL_MEDIA_MIME_TYPES,
 } from "../constants/media"
+import { MEDIA_IMAGE_DIMENSION_RULES } from "../config/validation-thresholds"
 
 const mediaKindEnum = z.enum(["image", "document", "audio", "video"])
 const allMimeEnum = z.enum(ALL_MEDIA_MIME_TYPES)
@@ -39,33 +40,62 @@ export const createMediaSchema = z.object({
   defaultAlt: z.string().max(160).optional(),
   defaultCaption: z.string().max(300).optional(),
 }).superRefine((data, ctx) => {
-  const allowedMimeTypes = MIME_TYPES_BY_KIND[data.kind]
-  const isValidForKind = allowedMimeTypes.includes(data.mimeType)
-
-  if (!isValidForKind) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["mimeType"],
-      message: "mimeType does not match kind",
-    })
-  }
-
-  if (data.kind === "image") {
-    if (data.width !== undefined && data.height === undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["height"],
-        message: "height is required when width is provided for images",
-      })
-    }
-
-    if (data.height !== undefined && data.width === undefined) {
+    if (data.kind === "image") {
+    if (data.width === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["width"],
-        message: "width is required when height is provided for images",
+        message: "width is required for images",
       })
     }
+
+    if (data.height === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["height"],
+        message: "height is required for images",
+      })
+    }
+
+    if (
+      data.width !== undefined &&
+      (data.width < MEDIA_IMAGE_DIMENSION_RULES.minWidth ||
+        data.width > MEDIA_IMAGE_DIMENSION_RULES.maxWidth)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["width"],
+        message: `image width must be between ${MEDIA_IMAGE_DIMENSION_RULES.minWidth} and ${MEDIA_IMAGE_DIMENSION_RULES.maxWidth}px`,
+      })
+    }
+
+    if (
+      data.height !== undefined &&
+      (data.height < MEDIA_IMAGE_DIMENSION_RULES.minHeight ||
+        data.height > MEDIA_IMAGE_DIMENSION_RULES.maxHeight)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["height"],
+        message: `image height must be between ${MEDIA_IMAGE_DIMENSION_RULES.minHeight} and ${MEDIA_IMAGE_DIMENSION_RULES.maxHeight}px`,
+      })
+    }
+  }
+  
+  if ((data.kind === "audio" || data.kind === "document") && data.width !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["width"],
+      message: "width is only allowed for image or video media",
+    })
+  }
+
+  if ((data.kind === "audio" || data.kind === "document") && data.height !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["height"],
+      message: "height is only allowed for image or video media",
+    })
   }
 })
 
